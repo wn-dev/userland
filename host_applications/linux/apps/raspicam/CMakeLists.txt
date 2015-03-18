@@ -23,6 +23,7 @@ add_executable(raspistill ${COMMON_SOURCES} RaspiStill.c  RaspiTex.c RaspiTexUti
 add_executable(raspiyuv   ${COMMON_SOURCES} RaspiStillYUV.c)
 add_executable(raspivid   ${COMMON_SOURCES} RaspiVid.c)
 add_executable(raspividyuv  ${COMMON_SOURCES} RaspiVidYUV.c)
+add_executable(raspimjpeg RaspiMJPEG.c)
 
 set (MMAL_LIBS mmal_core mmal_util mmal_vc_client)
 
@@ -30,5 +31,6 @@ target_link_libraries(raspistill ${MMAL_LIBS} vcos bcm_host GLESv2 EGL m)
 target_link_libraries(raspiyuv   ${MMAL_LIBS} vcos bcm_host)
 target_link_libraries(raspivid   ${MMAL_LIBS} vcos bcm_host)
 target_link_libraries(raspividyuv   ${MMAL_LIBS} vcos bcm_host)
+target_link_libraries(raspimjpeg ${MMAL_LIBS} vcos bcm_host)
 
-install(TARGETS raspistill raspiyuv raspivid raspividyuv RUNTIME DESTINATION bin)
+install(TARGETS raspistill raspiyuv raspivid raspividyuv raspimjpeg RUNTIME DESTINATION bin)

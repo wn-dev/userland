@@ -1,6 +1,6 @@
 #/bin/bash
 
-if [ "armv6l" = `arch` ]; then
+if [ "armv6l" = `arch` -o "armv71" = `arch` ]; then
 	# Native compile on the Raspberry Pi
 	mkdir -p build/raspberry/release
 	pushd build/raspberry/release
