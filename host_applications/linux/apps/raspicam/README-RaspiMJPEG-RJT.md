@@ -30,6 +30,9 @@ These are now automatically set within raspimjpeg by a directory scan
 March 11th 2015
 Fix for motion triggered time lapse
 
-March 18th
+March 18th 2015
 Naming rules can now be used to create sub-folders under the base media path
 Thumbnails are stored in the root media but have a flattened pathname to the main capture incuded
+
+March 19th 2015
+Added v3 annotation support
