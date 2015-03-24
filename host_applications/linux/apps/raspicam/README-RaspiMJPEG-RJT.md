@@ -36,3 +36,7 @@ Thumbnails are stored in the root media but have a flattened pathname to the mai
 
 March 19th 2015
 Added v3 annotation support
+
+March 24th 2015
+More tolerant error handling
+Background boxing mode
