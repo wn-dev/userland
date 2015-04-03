@@ -78,31 +78,66 @@ MMAL_COMPONENT_T *camera = 0, *jpegencoder = 0, *jpegencoder2 = 0, *h264encoder 
 MMAL_CONNECTION_T *con_cam_res, *con_res_jpeg, *con_cam_h264, *con_cam_jpeg;
 FILE *jpegoutput_file = NULL, *jpegoutput2_file = NULL, *h264output_file = NULL, *status_file = NULL;
 MMAL_POOL_T *pool_jpegencoder, *pool_jpegencoder2, *pool_h264encoder;
-unsigned int tl_cnt=0, mjpeg_cnt=0, width=320, divider=5, image_cnt=0, image2_cnt=0, lapse_cnt=0, video_cnt=0, mp4box=0;
-unsigned int cam_setting_sharpness=0, cam_setting_contrast=0, cam_setting_brightness=50, cam_setting_saturation=0, cam_setting_iso=0, cam_setting_vs=0, cam_setting_ec=0, cam_setting_rotation=0, cam_setting_quality=85, cam_setting_raw=0, cam_setting_ce_en=0, cam_setting_ce_u=128, cam_setting_ce_v=128, cam_setting_hflip=0, cam_setting_vflip=0, cam_setting_annback=0;
-char cam_setting_em[20]="auto", cam_setting_wb[20]="auto", cam_setting_ie[20]="none", cam_setting_mm[20]="average", subdir_char='@';
-unsigned long int cam_setting_bitrate=17000000, cam_setting_roi_x=0, cam_setting_roi_y=0, cam_setting_roi_w=65536, cam_setting_roi_h=65536, cam_setting_ss=0;
-unsigned int video_width=1920, video_height=1080, video_fps=25, MP4Box_fps=25, image_width=2592, image_height=1944;
-char *jpeg_filename = 0, *jpeg2_filename = 0, *lapse_filename = 0, *h264_filename = 0, *pipe_filename = 0, *status_filename = 0, *cam_setting_annotation = 0, *thumb_gen = 0, *user_config = 0, *media_path = 0, *filename_recording = 0;
-unsigned char timelapse=0, running=1, autostart=1, quality=85, idle=0, capturing=0, motion_detection=0;
-//v3 annotation
-unsigned int anno_version = 2, anno3_text_size = 0, anno3_custom_background[4]={0,0,128,128}, anno3_custom_text[4]={0,255,128,128};
+unsigned int tl_cnt=0, mjpeg_cnt=0, image_cnt=0, image2_cnt=0, lapse_cnt=0, video_cnt=0;
+char *filename_recording = 0;
+unsigned char timelapse=0, running=1, autostart=1, idle=0, capturing=0;
 
-int time_between_pic;
+//hold config file data for both dflt and user config files and u long versions
+#define KEY_COUNT 60
+char *cfg_strd[KEY_COUNT + 1];
+char *cfg_stru[KEY_COUNT + 1];
+long int cfg_val[KEY_COUNT + 1];
+char *cfg_key[] ={
+   "annotation","anno_background","anno_version",
+   "anno3_custom_background_colour","anno3_custom_background_Y","anno3_custom_background_U","anno3_custom_background_V",
+   "anno3_custom_text_colour","anno3_custom_text_Y","anno3_custom_text_U","anno3_custom_text_V","anno_text_size",
+   "sharpness","contrast","brightness","saturation","iso",
+   "metering_mode","video_stabilisation","exposure_compensation","exposure_mode","white_balance","image_effect",
+   "colour_effect_en","colour_effect_u","colour_effect_v",
+   "rotation","hflip","vflip",
+   "sensor_region_x","sensor_region_y","sensor_region_w","sensor_region_h",
+   "shutter_speed","raw_layer",
+   "width","quality","divider",
+   "video_width","video_height","video_fps","video_bitrate",
+   "MP4Box","MP4Box_fps",
+   "image_width","image_height","image_quality","tl_interval",
+   "preview_path","image_path","lapse_path","video_path","status_file","control_file","media_path","subdir_char",
+   "thumb_gen","autostart","motion_detection","user_config"
+};
+
+typedef enum cfgkey_type
+   {
+   c_annotation,c_anno_background,c_anno_version,
+   c_anno3_custom_background_colour,c_anno3_custom_background_Y,c_anno3_custom_background_U,c_anno3_custom_background_V,
+   c_anno3_custom_text_colour,c_anno3_custom_text_Y,c_anno3_custom_text_U,c_anno3_custom_text_V,c_anno_text_size,
+   c_sharpness,c_contrast,c_brightness,c_saturation,c_iso,
+   c_metering_mode,c_video_stabilisation,c_exposure_compensation,c_exposure_mode,c_white_balance,c_image_effect,
+   c_colour_effect_en,c_colour_effect_u,c_colour_effect_v,
+   c_rotation,c_hflip,c_vflip,
+   c_sensor_region_x,c_sensor_region_y,c_sensor_region_w,c_sensor_region_h,
+   c_shutter_speed,c_raw_layer,
+   c_width,c_quality,c_divider,
+   c_video_width,c_video_height,c_video_fps,c_video_bitrate,
+   c_MP4Box,c_MP4Box_fps,
+   c_image_width,c_image_height,c_image_quality,c_tl_interval,
+   c_preview_path,c_image_path,c_lapse_path,c_video_path,c_status_file,c_control_file,c_media_path,c_subdir_char,
+   c_thumb_gen,c_autostart,c_motion_detection,c_user_config
+   } cfgkey_type; 
+
 time_t currTime;
 struct tm *localTime;
 
-void read_config(char *cfilename);
+void read_config(char *cfilename, int type);
 void cam_set_annotation();
 void makeFilename(char** filename, char *template);
 void createMediaPath(char* filename);
-  
+
 void error (const char *string, char fatal) {
-   fprintf(stderr, "Error: %s\n", string);
+   printf("Error: %s\n", string);
    if (fatal == 0)
       return;
-   if(status_filename != 0) {
-      status_file = fopen(status_filename, "w");
+   if(cfg_stru[c_status_file] != 0) {
+      status_file = fopen(cfg_stru[c_status_file], "w");
       if(status_file) {
          fprintf(status_file, "Error: %s", string);
          fclose(status_file);
@@ -128,7 +163,7 @@ static void jpegencoder_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T
 
    if(mjpeg_cnt == 0) {
       if(!jpegoutput_file) {
-         asprintf(&filename_temp, jpeg_filename, image_cnt);
+         asprintf(&filename_temp, cfg_stru[c_preview_path], image_cnt);
          asprintf(&filename_temp2, "%s.part", filename_temp);
          jpegoutput_file = fopen(filename_temp2, "wb");
          free(filename_temp);
@@ -147,11 +182,11 @@ static void jpegencoder_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T
   
    if(buffer->flags & MMAL_BUFFER_HEADER_FLAG_FRAME_END) {
       mjpeg_cnt++;
-      if(mjpeg_cnt == divider) {
+      if(mjpeg_cnt == cfg_val[c_divider]) {
          if(jpegoutput_file != NULL) {
             fclose(jpegoutput_file);
             jpegoutput_file = NULL;
-            asprintf(&filename_temp, jpeg_filename, image_cnt);
+            asprintf(&filename_temp, cfg_stru[c_preview_path], image_cnt);
             asprintf(&filename_temp2, "%s.part", filename_temp);
             rename(filename_temp2, filename_temp);
             free(filename_temp);
@@ -193,14 +228,14 @@ static void jpegencoder2_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_
    if(buffer->flags & MMAL_BUFFER_HEADER_FLAG_FRAME_END) {
       if(jpegoutput2_file != NULL) fclose(jpegoutput2_file);
       jpegoutput2_file = NULL;
-      if(status_filename != 0) {
+      if(cfg_stru[c_status_file] != 0) {
          if(!timelapse) {
-            status_file = fopen(status_filename, "w");
+            status_file = fopen(cfg_stru[c_status_file], "w");
             fprintf(status_file, "ready");
             fclose(status_file);
          }
       }
-      if (timelapse && strlen(lapse_filename) > 10)
+      if (timelapse && strlen(cfg_stru[c_lapse_path]) > 10)
          lapse_cnt++;
       else
          image2_cnt++;
@@ -249,60 +284,21 @@ static void h264encoder_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T
 
 }
 
-void cam_set_sharpness () {
-   MMAL_RATIONAL_T value = {cam_setting_sharpness, 100};
-   status = mmal_port_parameter_set_rational(camera->control, MMAL_PARAMETER_SHARPNESS, value);
-   if(status != MMAL_SUCCESS) error("Could not set sharpness", 0);
-}
-
-void cam_set_contrast () {
-   MMAL_RATIONAL_T value = {cam_setting_contrast, 100};
-   status = mmal_port_parameter_set_rational(camera->control, MMAL_PARAMETER_CONTRAST, value);
-   if(status != MMAL_SUCCESS) error("Could not set contrast", 0);
-}
-
-void cam_set_brightness () {
-   MMAL_RATIONAL_T value = {cam_setting_brightness, 100};
-   status = mmal_port_parameter_set_rational(camera->control, MMAL_PARAMETER_BRIGHTNESS, value);
-   if(status != MMAL_SUCCESS) error("Could not set brightness", 0);
-}
-
-void cam_set_saturation () {
-   MMAL_RATIONAL_T value = {cam_setting_saturation, 100};
-   status = mmal_port_parameter_set_rational(camera->control, MMAL_PARAMETER_SATURATION, value);
-   if(status != MMAL_SUCCESS) error("Could not set saturation", 0);
-}
-
-void cam_set_iso () {
-   status = mmal_port_parameter_set_uint32(camera->control, MMAL_PARAMETER_ISO, cam_setting_iso);
-   if(status != MMAL_SUCCESS) error("Could not set ISO", 0);
-}
-
-void cam_set_vs () {
-   status = mmal_port_parameter_set_boolean(camera->control, MMAL_PARAMETER_VIDEO_STABILISATION, cam_setting_vs);
-   if(status != MMAL_SUCCESS) error("Could not set video stabilisation", 0);
-}
-
-void cam_set_ec () {
-   status = mmal_port_parameter_set_int32(camera->control, MMAL_PARAMETER_EXPOSURE_COMP, cam_setting_ec);
-   if(status != MMAL_SUCCESS) error("Could not set exposure compensation", 0);
-}
-
 void cam_set_em () {
    MMAL_PARAM_EXPOSUREMODE_T mode;
-   if(strcmp(cam_setting_em, "off") == 0) mode = MMAL_PARAM_EXPOSUREMODE_OFF;
-   else if(strcmp(cam_setting_em, "auto") == 0) mode = MMAL_PARAM_EXPOSUREMODE_AUTO;
-   else if(strcmp(cam_setting_em, "night") == 0) mode = MMAL_PARAM_EXPOSUREMODE_NIGHT;
-   else if(strcmp(cam_setting_em, "nightpreview") == 0) mode = MMAL_PARAM_EXPOSUREMODE_NIGHTPREVIEW;
-   else if(strcmp(cam_setting_em, "backlight") == 0) mode = MMAL_PARAM_EXPOSUREMODE_BACKLIGHT;
-   else if(strcmp(cam_setting_em, "spotlight") == 0) mode = MMAL_PARAM_EXPOSUREMODE_SPOTLIGHT;
-   else if(strcmp(cam_setting_em, "sports") == 0) mode = MMAL_PARAM_EXPOSUREMODE_SPORTS;
-   else if(strcmp(cam_setting_em, "snow") == 0) mode = MMAL_PARAM_EXPOSUREMODE_SNOW;
-   else if(strcmp(cam_setting_em, "beach") == 0) mode = MMAL_PARAM_EXPOSUREMODE_BEACH;
-   else if(strcmp(cam_setting_em, "verylong") == 0) mode = MMAL_PARAM_EXPOSUREMODE_VERYLONG;
-   else if(strcmp(cam_setting_em, "fixedfps") == 0) mode = MMAL_PARAM_EXPOSUREMODE_FIXEDFPS;
-   else if(strcmp(cam_setting_em, "antishake") == 0) mode = MMAL_PARAM_EXPOSUREMODE_ANTISHAKE;
-   else if(strcmp(cam_setting_em, "fireworks") == 0) mode = MMAL_PARAM_EXPOSUREMODE_FIREWORKS;
+   if(strcmp(cfg_stru[c_exposure_mode], "off") == 0) mode = MMAL_PARAM_EXPOSUREMODE_OFF;
+   else if(strcmp(cfg_stru[c_exposure_mode], "auto") == 0) mode = MMAL_PARAM_EXPOSUREMODE_AUTO;
+   else if(strcmp(cfg_stru[c_exposure_mode], "night") == 0) mode = MMAL_PARAM_EXPOSUREMODE_NIGHT;
+   else if(strcmp(cfg_stru[c_exposure_mode], "nightpreview") == 0) mode = MMAL_PARAM_EXPOSUREMODE_NIGHTPREVIEW;
+   else if(strcmp(cfg_stru[c_exposure_mode], "backlight") == 0) mode = MMAL_PARAM_EXPOSUREMODE_BACKLIGHT;
+   else if(strcmp(cfg_stru[c_exposure_mode], "spotlight") == 0) mode = MMAL_PARAM_EXPOSUREMODE_SPOTLIGHT;
+   else if(strcmp(cfg_stru[c_exposure_mode], "sports") == 0) mode = MMAL_PARAM_EXPOSUREMODE_SPORTS;
+   else if(strcmp(cfg_stru[c_exposure_mode], "snow") == 0) mode = MMAL_PARAM_EXPOSUREMODE_SNOW;
+   else if(strcmp(cfg_stru[c_exposure_mode], "beach") == 0) mode = MMAL_PARAM_EXPOSUREMODE_BEACH;
+   else if(strcmp(cfg_stru[c_exposure_mode], "verylong") == 0) mode = MMAL_PARAM_EXPOSUREMODE_VERYLONG;
+   else if(strcmp(cfg_stru[c_exposure_mode], "fixedfps") == 0) mode = MMAL_PARAM_EXPOSUREMODE_FIXEDFPS;
+   else if(strcmp(cfg_stru[c_exposure_mode], "antishake") == 0) mode = MMAL_PARAM_EXPOSUREMODE_ANTISHAKE;
+   else if(strcmp(cfg_stru[c_exposure_mode], "fireworks") == 0) mode = MMAL_PARAM_EXPOSUREMODE_FIREWORKS;
    else {error("Invalid exposure mode", 1); return;}
    MMAL_PARAMETER_EXPOSUREMODE_T exp_mode = {{MMAL_PARAMETER_EXPOSURE_MODE,sizeof(exp_mode)}, mode};
    status = mmal_port_parameter_set(camera->control, &exp_mode.hdr);
@@ -311,16 +307,16 @@ void cam_set_em () {
 
 void cam_set_wb () {
    MMAL_PARAM_AWBMODE_T awb_mode;
-   if(strcmp(cam_setting_wb, "off") == 0) awb_mode = MMAL_PARAM_AWBMODE_OFF;
-   else if(strcmp(cam_setting_wb, "auto") == 0) awb_mode = MMAL_PARAM_AWBMODE_AUTO;
-   else if(strcmp(cam_setting_wb, "sun") == 0) awb_mode = MMAL_PARAM_AWBMODE_SUNLIGHT;
-   else if(strcmp(cam_setting_wb, "cloudy") == 0) awb_mode = MMAL_PARAM_AWBMODE_CLOUDY;
-   else if(strcmp(cam_setting_wb, "shade") == 0) awb_mode = MMAL_PARAM_AWBMODE_SHADE;
-   else if(strcmp(cam_setting_wb, "tungsten") == 0) awb_mode = MMAL_PARAM_AWBMODE_TUNGSTEN;
-   else if(strcmp(cam_setting_wb, "fluorescent") == 0) awb_mode = MMAL_PARAM_AWBMODE_FLUORESCENT;
-   else if(strcmp(cam_setting_wb, "incandescent") == 0) awb_mode = MMAL_PARAM_AWBMODE_INCANDESCENT;
-   else if(strcmp(cam_setting_wb, "flash") == 0) awb_mode = MMAL_PARAM_AWBMODE_FLASH;
-   else if(strcmp(cam_setting_wb, "horizon") == 0) awb_mode = MMAL_PARAM_AWBMODE_HORIZON;
+   if(strcmp(cfg_stru[c_white_balance], "off") == 0) awb_mode = MMAL_PARAM_AWBMODE_OFF;
+   else if(strcmp(cfg_stru[c_white_balance], "auto") == 0) awb_mode = MMAL_PARAM_AWBMODE_AUTO;
+   else if(strcmp(cfg_stru[c_white_balance], "sun") == 0) awb_mode = MMAL_PARAM_AWBMODE_SUNLIGHT;
+   else if(strcmp(cfg_stru[c_white_balance], "cloudy") == 0) awb_mode = MMAL_PARAM_AWBMODE_CLOUDY;
+   else if(strcmp(cfg_stru[c_white_balance], "shade") == 0) awb_mode = MMAL_PARAM_AWBMODE_SHADE;
+   else if(strcmp(cfg_stru[c_white_balance], "tungsten") == 0) awb_mode = MMAL_PARAM_AWBMODE_TUNGSTEN;
+   else if(strcmp(cfg_stru[c_white_balance], "fluorescent") == 0) awb_mode = MMAL_PARAM_AWBMODE_FLUORESCENT;
+   else if(strcmp(cfg_stru[c_white_balance], "incandescent") == 0) awb_mode = MMAL_PARAM_AWBMODE_INCANDESCENT;
+   else if(strcmp(cfg_stru[c_white_balance], "flash") == 0) awb_mode = MMAL_PARAM_AWBMODE_FLASH;
+   else if(strcmp(cfg_stru[c_white_balance], "horizon") == 0) awb_mode = MMAL_PARAM_AWBMODE_HORIZON;
    else {error("Invalid white balance", 0); return;}
    MMAL_PARAMETER_AWBMODE_T param = {{MMAL_PARAMETER_AWB_MODE,sizeof(param)}, awb_mode};
    status = mmal_port_parameter_set(camera->control, &param.hdr);
@@ -329,10 +325,10 @@ void cam_set_wb () {
 
 void cam_set_mm () {
    MMAL_PARAM_EXPOSUREMETERINGMODE_T m_mode;
-   if(strcmp(cam_setting_mm, "average") == 0) m_mode = MMAL_PARAM_EXPOSUREMETERINGMODE_AVERAGE;
-   else if(strcmp(cam_setting_mm, "spot") == 0) m_mode = MMAL_PARAM_EXPOSUREMETERINGMODE_SPOT;
-   else if(strcmp(cam_setting_mm, "backlit") == 0) m_mode = MMAL_PARAM_EXPOSUREMETERINGMODE_BACKLIT;
-   else if(strcmp(cam_setting_mm, "matrix") == 0) m_mode = MMAL_PARAM_EXPOSUREMETERINGMODE_MATRIX;
+   if(strcmp(cfg_stru[c_metering_mode], "average") == 0) m_mode = MMAL_PARAM_EXPOSUREMETERINGMODE_AVERAGE;
+   else if(strcmp(cfg_stru[c_metering_mode], "spot") == 0) m_mode = MMAL_PARAM_EXPOSUREMETERINGMODE_SPOT;
+   else if(strcmp(cfg_stru[c_metering_mode], "backlit") == 0) m_mode = MMAL_PARAM_EXPOSUREMETERINGMODE_BACKLIT;
+   else if(strcmp(cfg_stru[c_metering_mode], "matrix") == 0) m_mode = MMAL_PARAM_EXPOSUREMETERINGMODE_MATRIX;
    else {error("Invalid metering mode", 0); return;}
    MMAL_PARAMETER_EXPOSUREMETERINGMODE_T meter_mode = {{MMAL_PARAMETER_EXP_METERING_MODE,sizeof(meter_mode)}, m_mode};
    status = mmal_port_parameter_set(camera->control, &meter_mode.hdr);
@@ -341,26 +337,26 @@ void cam_set_mm () {
 
 void cam_set_ie () {
    MMAL_PARAM_IMAGEFX_T imageFX;
-   if(strcmp(cam_setting_ie, "none") == 0) imageFX = MMAL_PARAM_IMAGEFX_NONE;
-   else if(strcmp(cam_setting_ie, "negative") == 0) imageFX = MMAL_PARAM_IMAGEFX_NEGATIVE;
-   else if(strcmp(cam_setting_ie, "solarise") == 0) imageFX = MMAL_PARAM_IMAGEFX_SOLARIZE;
-   else if(strcmp(cam_setting_ie, "sketch") == 0) imageFX = MMAL_PARAM_IMAGEFX_SKETCH;
-   else if(strcmp(cam_setting_ie, "denoise") == 0) imageFX = MMAL_PARAM_IMAGEFX_DENOISE;
-   else if(strcmp(cam_setting_ie, "emboss") == 0) imageFX = MMAL_PARAM_IMAGEFX_EMBOSS;
-   else if(strcmp(cam_setting_ie, "oilpaint") == 0) imageFX = MMAL_PARAM_IMAGEFX_OILPAINT;
-   else if(strcmp(cam_setting_ie, "hatch") == 0) imageFX = MMAL_PARAM_IMAGEFX_HATCH;
-   else if(strcmp(cam_setting_ie, "gpen") == 0) imageFX = MMAL_PARAM_IMAGEFX_GPEN;
-   else if(strcmp(cam_setting_ie, "pastel") == 0) imageFX = MMAL_PARAM_IMAGEFX_PASTEL;
-   else if(strcmp(cam_setting_ie, "watercolour") == 0) imageFX = MMAL_PARAM_IMAGEFX_WATERCOLOUR;
-   else if(strcmp(cam_setting_ie, "film") == 0) imageFX = MMAL_PARAM_IMAGEFX_FILM;
-   else if(strcmp(cam_setting_ie, "blur") == 0) imageFX = MMAL_PARAM_IMAGEFX_BLUR;
-   else if(strcmp(cam_setting_ie, "saturation") == 0) imageFX = MMAL_PARAM_IMAGEFX_SATURATION;
-   else if(strcmp(cam_setting_ie, "colourswap") == 0) imageFX = MMAL_PARAM_IMAGEFX_COLOURSWAP;
-   else if(strcmp(cam_setting_ie, "washedout") == 0) imageFX = MMAL_PARAM_IMAGEFX_WASHEDOUT;
-   else if(strcmp(cam_setting_ie, "posterise") == 0) imageFX = MMAL_PARAM_IMAGEFX_POSTERISE;
-   else if(strcmp(cam_setting_ie, "colourpoint") == 0) imageFX = MMAL_PARAM_IMAGEFX_COLOURPOINT;
-   else if(strcmp(cam_setting_ie, "colourbalance") == 0) imageFX = MMAL_PARAM_IMAGEFX_COLOURBALANCE;
-   else if(strcmp(cam_setting_ie, "cartoon") == 0) imageFX = MMAL_PARAM_IMAGEFX_CARTOON;
+   if(strcmp(cfg_stru[c_image_effect], "none") == 0) imageFX = MMAL_PARAM_IMAGEFX_NONE;
+   else if(strcmp(cfg_stru[c_image_effect], "negative") == 0) imageFX = MMAL_PARAM_IMAGEFX_NEGATIVE;
+   else if(strcmp(cfg_stru[c_image_effect], "solarise") == 0) imageFX = MMAL_PARAM_IMAGEFX_SOLARIZE;
+   else if(strcmp(cfg_stru[c_image_effect], "sketch") == 0) imageFX = MMAL_PARAM_IMAGEFX_SKETCH;
+   else if(strcmp(cfg_stru[c_image_effect], "denoise") == 0) imageFX = MMAL_PARAM_IMAGEFX_DENOISE;
+   else if(strcmp(cfg_stru[c_image_effect], "emboss") == 0) imageFX = MMAL_PARAM_IMAGEFX_EMBOSS;
+   else if(strcmp(cfg_stru[c_image_effect], "oilpaint") == 0) imageFX = MMAL_PARAM_IMAGEFX_OILPAINT;
+   else if(strcmp(cfg_stru[c_image_effect], "hatch") == 0) imageFX = MMAL_PARAM_IMAGEFX_HATCH;
+   else if(strcmp(cfg_stru[c_image_effect], "gpen") == 0) imageFX = MMAL_PARAM_IMAGEFX_GPEN;
+   else if(strcmp(cfg_stru[c_image_effect], "pastel") == 0) imageFX = MMAL_PARAM_IMAGEFX_PASTEL;
+   else if(strcmp(cfg_stru[c_image_effect], "watercolour") == 0) imageFX = MMAL_PARAM_IMAGEFX_WATERCOLOUR;
+   else if(strcmp(cfg_stru[c_image_effect], "film") == 0) imageFX = MMAL_PARAM_IMAGEFX_FILM;
+   else if(strcmp(cfg_stru[c_image_effect], "blur") == 0) imageFX = MMAL_PARAM_IMAGEFX_BLUR;
+   else if(strcmp(cfg_stru[c_image_effect], "saturation") == 0) imageFX = MMAL_PARAM_IMAGEFX_SATURATION;
+   else if(strcmp(cfg_stru[c_image_effect], "colourswap") == 0) imageFX = MMAL_PARAM_IMAGEFX_COLOURSWAP;
+   else if(strcmp(cfg_stru[c_image_effect], "washedout") == 0) imageFX = MMAL_PARAM_IMAGEFX_WASHEDOUT;
+   else if(strcmp(cfg_stru[c_image_effect], "posterise") == 0) imageFX = MMAL_PARAM_IMAGEFX_POSTERISE;
+   else if(strcmp(cfg_stru[c_image_effect], "colourpoint") == 0) imageFX = MMAL_PARAM_IMAGEFX_COLOURPOINT;
+   else if(strcmp(cfg_stru[c_image_effect], "colourbalance") == 0) imageFX = MMAL_PARAM_IMAGEFX_COLOURBALANCE;
+   else if(strcmp(cfg_stru[c_image_effect], "cartoon") == 0) imageFX = MMAL_PARAM_IMAGEFX_CARTOON;
    else {error("Invalid image effect", 0); return;}
    MMAL_PARAMETER_IMAGEFX_T imgFX = {{MMAL_PARAMETER_IMAGE_EFFECT,sizeof(imgFX)}, imageFX};
    status = mmal_port_parameter_set(camera->control, &imgFX.hdr);
@@ -369,27 +365,18 @@ void cam_set_ie () {
 
 void cam_set_ce () {
    MMAL_PARAMETER_COLOURFX_T colfx = {{MMAL_PARAMETER_COLOUR_EFFECT,sizeof(colfx)}, 0, 0, 0};
-   colfx.enable = cam_setting_ce_en;
-   colfx.u = cam_setting_ce_u;
-   colfx.v = cam_setting_ce_v;
+   colfx.enable = cfg_val[c_colour_effect_en];
+   colfx.u = cfg_val[c_colour_effect_u];
+   colfx.v = cfg_val[c_colour_effect_v];
    status = mmal_port_parameter_set(camera->control, &colfx.hdr);
    if(status != MMAL_SUCCESS) error("Could not set exposure compensation", 0);
 }
 
-void cam_set_rotation () {
-   status = mmal_port_parameter_set_int32(camera->output[0], MMAL_PARAMETER_ROTATION, cam_setting_rotation);
-   if(status != MMAL_SUCCESS) {error("Could not set rotation (0)", 0); return;}
-   status = mmal_port_parameter_set_int32(camera->output[1], MMAL_PARAMETER_ROTATION, cam_setting_rotation);
-   if(status != MMAL_SUCCESS) {error("Could not set rotation (1)", 0); return;}
-   status = mmal_port_parameter_set_int32(camera->output[2], MMAL_PARAMETER_ROTATION, cam_setting_rotation);
-   if(status != MMAL_SUCCESS) {error("Could not set rotation (2)", 0); return;}
-}
-
 void cam_set_flip () {
    MMAL_PARAMETER_MIRROR_T mirror = {{MMAL_PARAMETER_MIRROR, sizeof(MMAL_PARAMETER_MIRROR_T)}, MMAL_PARAM_MIRROR_NONE};
-   if (cam_setting_hflip && cam_setting_vflip) mirror.value = MMAL_PARAM_MIRROR_BOTH;
-   else if (cam_setting_hflip) mirror.value = MMAL_PARAM_MIRROR_HORIZONTAL;
-   else if (cam_setting_vflip) mirror.value = MMAL_PARAM_MIRROR_VERTICAL;
+   if (cfg_val[c_hflip] && cfg_val[c_vflip]) mirror.value = MMAL_PARAM_MIRROR_BOTH;
+   else if (cfg_val[c_hflip]) mirror.value = MMAL_PARAM_MIRROR_HORIZONTAL;
+   else if (cfg_val[c_vflip]) mirror.value = MMAL_PARAM_MIRROR_VERTICAL;
    status = mmal_port_parameter_set(camera->output[0], &mirror.hdr);
    if(status != MMAL_SUCCESS) {error("Could not set flip (0)", 0); return;}
    status = mmal_port_parameter_set(camera->output[1], &mirror.hdr);
@@ -400,33 +387,98 @@ void cam_set_flip () {
 
 void cam_set_roi () {
    MMAL_PARAMETER_INPUT_CROP_T crop = {{MMAL_PARAMETER_INPUT_CROP, sizeof(MMAL_PARAMETER_INPUT_CROP_T)}};
-   crop.rect.x = cam_setting_roi_x;
-   crop.rect.y = cam_setting_roi_y;
-   crop.rect.width = cam_setting_roi_w;
-   crop.rect.height = cam_setting_roi_h;
+   crop.rect.x = cfg_val[c_sensor_region_x];
+   crop.rect.y = cfg_val[c_sensor_region_y];
+   crop.rect.width = cfg_val[c_sensor_region_w];
+   crop.rect.height = cfg_val[c_sensor_region_h];
    status = mmal_port_parameter_set(camera->control, &crop.hdr);
    if(status != MMAL_SUCCESS) error("Could not set sensor area", 0);
 }
 
-void cam_set_ss () {
-   status = mmal_port_parameter_set_uint32(camera->control, MMAL_PARAMETER_SHUTTER_SPEED, cam_setting_ss);
-   if(status != MMAL_SUCCESS) error("Could not set shutter speed", 0);
-}
-
-void cam_set_quality () {
-   status = mmal_port_parameter_set_uint32(jpegencoder2->output[0], MMAL_PARAMETER_JPEG_Q_FACTOR, cam_setting_quality);
-   if(status != MMAL_SUCCESS) error("Could not set quality", 0);
-}
-
-void cam_set_raw () {
-   status = mmal_port_parameter_set_boolean(camera->output[2], MMAL_PARAMETER_ENABLE_RAW_CAPTURE, cam_setting_raw);
-   if(status != MMAL_SUCCESS) error("Could not set raw layer", 0);
-}
-
-void cam_set_bitrate () {
-   h264encoder->output[0]->format->bitrate = cam_setting_bitrate;
-   status = mmal_port_format_commit(h264encoder->output[0]);
-   if(status != MMAL_SUCCESS) error("Could not set bitrate", 0);
+void cam_set(int key) {
+   int control = 0;
+   unsigned int id;
+   MMAL_RATIONAL_T value;
+   value.den = 100;
+   
+   switch(key) {
+      case c_sharpness:
+         control = 1;id = MMAL_PARAMETER_SHARPNESS;break;
+      case c_contrast:
+         control = 1;id = MMAL_PARAMETER_CONTRAST;break;
+      case c_brightness:
+         control = 1;id = MMAL_PARAMETER_BRIGHTNESS;break;
+      case c_saturation:
+         control = 1;id = MMAL_PARAMETER_SATURATION;break;
+      case c_iso:
+         control = 3;id = MMAL_PARAMETER_ISO;break;
+      case c_video_stabilisation:
+         control = 4;id = MMAL_PARAMETER_VIDEO_STABILISATION;break;
+      case c_raw_layer:
+         control = 4;id = MMAL_PARAMETER_ENABLE_RAW_CAPTURE;break;
+      case c_exposure_compensation:
+         control = 2;id = MMAL_PARAMETER_EXPOSURE_COMP;break;
+      case c_shutter_speed:
+         control = 3;id = MMAL_PARAMETER_SHUTTER_SPEED;break;
+      case c_rotation:
+         status = mmal_port_parameter_set_int32(camera->output[0], MMAL_PARAMETER_ROTATION, cfg_val[c_rotation]);
+         if(status != MMAL_SUCCESS) printf("Could not set rotation (0)\n");
+         status = mmal_port_parameter_set_int32(camera->output[1], MMAL_PARAMETER_ROTATION, cfg_val[c_rotation]);
+         if(status != MMAL_SUCCESS) printf("Could not set rotation (1)\n");
+         status = mmal_port_parameter_set_int32(camera->output[2], MMAL_PARAMETER_ROTATION, cfg_val[c_rotation]);
+         if(status != MMAL_SUCCESS) printf("Could not set rotation (2)\n");
+         break;
+      case c_image_quality:
+         status = mmal_port_parameter_set_uint32(jpegencoder2->output[0], MMAL_PARAMETER_JPEG_Q_FACTOR, cfg_val[c_image_quality]);
+         if(status != MMAL_SUCCESS) printf("Could not set quality\n");
+         break;
+      case c_video_bitrate:
+         h264encoder->output[0]->format->bitrate = cfg_val[c_video_bitrate];
+         status = mmal_port_format_commit(h264encoder->output[0]);
+         if(status != MMAL_SUCCESS) printf("Could not set bitrate\n");
+         break;
+      case c_exposure_mode:
+         cam_set_em();
+         break;
+      case c_white_balance:
+         cam_set_wb();
+         break;
+      case c_metering_mode:
+         cam_set_mm();
+         break;
+      case c_image_effect:
+         cam_set_ie();
+         break;
+      case c_colour_effect_en:
+         cam_set_ce();
+         break;
+      case c_hflip:
+         cam_set_flip();
+         break;
+      case c_sensor_region_x:
+         cam_set_roi();
+         break;
+   }
+   
+   switch(control) {
+      case 1: //rational
+         value.num = cfg_val[key];
+         status = mmal_port_parameter_set_rational(camera->control, id, value);
+         if(status != MMAL_SUCCESS) printf("Could not set %s\n", cfg_key[key]);
+         break;
+      case 2: //int32
+         status = mmal_port_parameter_set_int32(camera->control, id, cfg_val[key]);
+         if(status != MMAL_SUCCESS) printf("Could not set %s\n", cfg_key[key]);
+         break;
+      case 3: //uint32
+         status = mmal_port_parameter_set_uint32(camera->control, id, cfg_val[key]);
+         if(status != MMAL_SUCCESS) printf("Could not set %s\n", cfg_key[key]);
+         break;
+      case 4: //boolean
+         status = mmal_port_parameter_set_boolean(camera->control, id, cfg_val[key]);
+         if(status != MMAL_SUCCESS) printf("Could not set %s\n", cfg_key[key]);
+         break;
+   }
 }
 
 void cam_set_annotationV2 (char *filename_temp, MMAL_BOOL_T enable) {
@@ -439,7 +491,7 @@ void cam_set_annotationV2 (char *filename_temp, MMAL_BOOL_T enable) {
    anno.show_lens = 0;
    anno.show_caf = 0;
    anno.show_motion = 0;
-   anno.black_text_background = cam_setting_annback;
+   anno.black_text_background = cfg_val[c_anno_background];
 
    status = mmal_port_parameter_set(camera->control, &anno.hdr);
    if(status != MMAL_SUCCESS) error("Could not set annotation", 0);
@@ -447,7 +499,7 @@ void cam_set_annotationV2 (char *filename_temp, MMAL_BOOL_T enable) {
 
 void cam_set_annotationV3 (char *filename_temp, MMAL_BOOL_T enable) {
    MMAL_PARAMETER_CAMERA_ANNOTATE_V3_T anno = {{MMAL_PARAMETER_ANNOTATE, sizeof(MMAL_PARAMETER_CAMERA_ANNOTATE_V3_T)}};
-
+   
    if (filename_temp != 0) strcpy(anno.text, filename_temp);
    anno.enable = enable;
    anno.show_shutter = 0;
@@ -455,17 +507,17 @@ void cam_set_annotationV3 (char *filename_temp, MMAL_BOOL_T enable) {
    anno.show_lens = 0;
    anno.show_caf = 0;
    anno.show_motion = 0;
-   anno.enable_text_background = cam_setting_annback;
-   anno.custom_background_colour = anno3_custom_background[0];
-   anno.custom_background_Y = anno3_custom_background[1];
-   anno.custom_background_U = anno3_custom_background[2];
-   anno.custom_background_V = anno3_custom_background[3];
-   anno.custom_text_colour = anno3_custom_text[0];
-   anno.custom_text_Y = anno3_custom_text[1];
-   anno.custom_text_U = anno3_custom_text[2];
-   anno.custom_text_V = anno3_custom_text[3];
-   anno.text_size = anno3_text_size;
-
+   anno.enable_text_background = cfg_val[c_anno_background];
+   anno.custom_background_colour = cfg_val[c_anno3_custom_background_colour];
+   anno.custom_background_Y = cfg_val[c_anno3_custom_background_Y];
+   anno.custom_background_U = cfg_val[c_anno3_custom_background_U];
+   anno.custom_background_V = cfg_val[c_anno3_custom_background_V];
+   anno.custom_text_colour = cfg_val[c_anno3_custom_text_colour];
+   anno.custom_text_Y = cfg_val[c_anno3_custom_text_Y];
+   anno.custom_text_U = cfg_val[c_anno3_custom_text_U];
+   anno.custom_text_V = cfg_val[c_anno3_custom_text_V];
+   anno.text_size = cfg_val[c_anno_text_size];
+   
    status = mmal_port_parameter_set(camera->control, &anno.hdr);
    if(status != MMAL_SUCCESS) error("Could not set annotation", 0);
 }
@@ -473,15 +525,15 @@ void cam_set_annotationV3 (char *filename_temp, MMAL_BOOL_T enable) {
 void cam_set_annotation() {
    char *filename_temp = 0;
    MMAL_BOOL_T enable;
-   if(cam_setting_annotation != 0) {
+   if(cfg_stru[c_annotation] != 0) {
       currTime = time(NULL);
       localTime = localtime (&currTime);
-      makeFilename(&filename_temp, cam_setting_annotation);
+      makeFilename(&filename_temp, cfg_stru[c_annotation]);
       enable = MMAL_TRUE;
    } else {
       enable = MMAL_FALSE;
    }
-   if (anno_version == 3) 
+   if (cfg_val[c_anno_version] == 3) 
       cam_set_annotationV3(filename_temp, enable);
    else
       cam_set_annotationV2(filename_temp, enable);
@@ -489,15 +541,21 @@ void cam_set_annotation() {
    if (filename_temp != 0) free(filename_temp);
 }
 
+void set_counts() {
+   image2_cnt = findNextCount(cfg_stru[c_image_path], "it");
+   video_cnt = findNextCount(cfg_stru[c_video_path], "v");
+}
+
 void start_all (int load_conf) {
    MMAL_ES_FORMAT_T *format;
    int max, i;
 
+   set_counts();
    //reload config if requested
    if (load_conf != 0) {
-      read_config("/etc/raspimjpeg");
-      if (user_config != 0)
-         read_config(user_config);
+      read_config("/etc/raspimjpeg",1);
+      if (cfg_stru[c_user_config] != 0)
+         read_config(cfg_stru[c_user_config],0);
    }
    //
    // create camera
@@ -509,12 +567,12 @@ void start_all (int load_conf) {
 
    MMAL_PARAMETER_CAMERA_CONFIG_T cam_config = {
       {MMAL_PARAMETER_CAMERA_CONFIG, sizeof(cam_config)},
-      .max_stills_w = image_width,
-      .max_stills_h = image_height,
+      .max_stills_w = cfg_val[c_image_width],
+      .max_stills_h = cfg_val[c_image_height],
       .stills_yuv422 = 0,
       .one_shot_stills = 1,
-      .max_preview_video_w = video_width,
-      .max_preview_video_h = video_height,
+      .max_preview_video_w = cfg_val[c_video_width],
+      .max_preview_video_h = cfg_val[c_video_height],
       .num_preview_video_frames = 3,
       .stills_capture_circular_buffer_height = 0,
       .fast_preview_resume = 0,
@@ -523,12 +581,12 @@ void start_all (int load_conf) {
    mmal_port_parameter_set(camera->control, &cam_config.hdr);
 
    format = camera->output[0]->format;
-   format->es->video.width = video_width;
-   format->es->video.height = video_height;
+   format->es->video.width = cfg_val[c_video_width];
+   format->es->video.height = cfg_val[c_video_height];
    format->es->video.crop.x = 0;
    format->es->video.crop.y = 0;
-   format->es->video.crop.width = video_width;
-   format->es->video.crop.height = video_height;
+   format->es->video.crop.width = cfg_val[c_video_width];
+   format->es->video.crop.height = cfg_val[c_video_height];
    format->es->video.frame_rate.num = 0;
    format->es->video.frame_rate.den = 1;
    status = mmal_port_format_commit(camera->output[0]);
@@ -537,13 +595,13 @@ void start_all (int load_conf) {
    format = camera->output[1]->format;
    format->encoding_variant = MMAL_ENCODING_I420;
    format->encoding = MMAL_ENCODING_OPAQUE;
-   format->es->video.width = video_width;
-   format->es->video.height = video_height;
+   format->es->video.width = cfg_val[c_video_width];
+   format->es->video.height = cfg_val[c_video_height];
    format->es->video.crop.x = 0;
    format->es->video.crop.y = 0;
-   format->es->video.crop.width = video_width;
-   format->es->video.crop.height = video_height;
-   format->es->video.frame_rate.num = video_fps;
+   format->es->video.crop.width = cfg_val[c_video_width];
+   format->es->video.crop.height = cfg_val[c_video_height];
+   format->es->video.frame_rate.num = cfg_val[c_video_fps];
    format->es->video.frame_rate.den = 1;
    status = mmal_port_format_commit(camera->output[1]);
    if(status != MMAL_SUCCESS) error("Could not set video format", 1);
@@ -552,12 +610,12 @@ void start_all (int load_conf) {
   
    format = camera->output[2]->format;
    format->encoding = MMAL_ENCODING_OPAQUE;
-   format->es->video.width = image_width;
-   format->es->video.height = image_height;
+   format->es->video.width = cfg_val[c_image_width];
+   format->es->video.height = cfg_val[c_image_height];
    format->es->video.crop.x = 0;
    format->es->video.crop.y = 0;
-   format->es->video.crop.width = image_width;
-   format->es->video.crop.height = image_height;
+   format->es->video.crop.width = cfg_val[c_image_width];
+   format->es->video.crop.height = cfg_val[c_image_height];
    format->es->video.frame_rate.num = 0;
    format->es->video.frame_rate.den = 1;
    status = mmal_port_format_commit(camera->output[2]);
@@ -584,7 +642,7 @@ void start_all (int load_conf) {
       jpegencoder->output[0]->buffer_num = jpegencoder->output[0]->buffer_num_min;
    status = mmal_port_format_commit(jpegencoder->output[0]);
    if(status != MMAL_SUCCESS) error("Could not set image format", 1);
-   status = mmal_port_parameter_set_uint32(jpegencoder->output[0], MMAL_PARAMETER_JPEG_Q_FACTOR, quality);
+   status = mmal_port_parameter_set_uint32(jpegencoder->output[0], MMAL_PARAMETER_JPEG_Q_FACTOR, cfg_val[c_quality]);
    if(status != MMAL_SUCCESS) error("Could not set jpeg quality", 1);
 
    status = mmal_component_enable(jpegencoder);
@@ -661,17 +719,17 @@ void start_all (int load_conf) {
    //
    // create image-resizer
    //
-   unsigned int height_temp = (unsigned long int)width*video_height/video_width;
+   unsigned int height_temp = (unsigned long int)cfg_val[c_width]*cfg_val[c_video_height]/cfg_val[c_video_width];
    height_temp -= height_temp%16;
    status = mmal_component_create("vc.ril.resize", &resizer);
    if(status != MMAL_SUCCESS && status != MMAL_ENOSYS) error("Could not create image resizer", 1);
   
    format = resizer->output[0]->format;
-   format->es->video.width = width;
+   format->es->video.width = cfg_val[c_width];
    format->es->video.height = height_temp;
    format->es->video.crop.x = 0;
    format->es->video.crop.y = 0;
-   format->es->video.crop.width = width;
+   format->es->video.crop.width = cfg_val[c_width];
    format->es->video.crop.height = height_temp;
    format->es->video.frame_rate.num = 30;
    format->es->video.frame_rate.den = 1;
@@ -724,25 +782,25 @@ void start_all (int load_conf) {
    //
    // settings
    //
-   cam_set_sharpness();
-   cam_set_contrast();
-   cam_set_brightness();
-   cam_set_saturation();
-   cam_set_iso();
-   cam_set_vs();
-   cam_set_ec();
-   cam_set_em();
-   cam_set_wb();
-   cam_set_mm();
-   cam_set_ie();
-   cam_set_ce();
-   cam_set_rotation();
-   cam_set_flip();
-   cam_set_roi();
-   cam_set_ss();
-   cam_set_quality();
-   cam_set_raw();
-   cam_set_bitrate();
+   cam_set(c_sharpness);
+   cam_set(c_contrast);
+   cam_set(c_brightness);
+   cam_set(c_saturation);
+   cam_set(c_iso);
+   cam_set(c_video_stabilisation);
+   cam_set(c_exposure_compensation);
+   cam_set(c_raw_layer);
+   cam_set(c_shutter_speed);
+   cam_set(c_image_quality);
+   cam_set(c_video_bitrate);
+   cam_set(c_rotation);
+   cam_set(c_exposure_mode);
+   cam_set(c_white_balance);
+   cam_set(c_metering_mode);
+   cam_set(c_image_effect);
+   cam_set(c_colour_effect_en);
+   cam_set(c_hflip);
+   cam_set(c_sensor_region_x);
    cam_set_annotation();
 }
 
@@ -757,14 +815,6 @@ void stop_all (void) {
    mmal_component_destroy(jpegencoder);
    mmal_component_destroy(h264encoder);
    mmal_component_destroy(camera);
-}
-
-void dbg(char *msg) {
-   FILE *fdbg = NULL;
-   fdbg = fopen("/var/www/debug.txt", "a");
-   fwrite(msg, 1, strlen(msg), fdbg);
-   fwrite("\n", 1, 1, fdbg);
-   fclose(fdbg);
 }
 
 char* trim(char*s) {
@@ -804,10 +854,10 @@ void createMediaPath(char* filename) {
    int r = 0;
    struct stat buf;
    //Create folders under media in filename as needed
-   if (strncmp(filename, media_path, strlen(media_path)) == 0) {
-      stat(media_path, &buf);
+   if (strncmp(filename, cfg_stru[c_media_path], strlen(cfg_stru[c_media_path])) == 0) {
+      stat(cfg_stru[c_media_path], &buf);
       //s to trailing path
-      s = filename + strlen(media_path) + 1;
+      s = filename + strlen(cfg_stru[c_media_path]) + 1;
       do {
          t = strchr(s, '/');
          if (t != NULL) {
@@ -855,7 +905,7 @@ void makeFilename(char** filename, char *template) {
             sp = f-spec;
          }
          switch(sp) {
-            case 0: sprintf(p[pi], "%s", "s");break;
+            case 0: sprintf(p[pi], "%s", "%");break;
             case 1: sprintf(p[pi], "%04d", localTime->tm_year+1900);break;
             case 2: sprintf(p[pi], "%02d", (localTime->tm_year+1900) % 100);break;
             case 3: sprintf(p[pi], "%02d", localTime->tm_mon+1);break;
@@ -887,7 +937,7 @@ void thumb_create(char *from_filename, char source) {
    unsigned int xcount=0;
    
    //Check if thumbnail needed for this type of source
-   if (thumb_gen != 0 && strchr(thumb_gen, source) != NULL) {
+   if (cfg_stru[c_thumb_gen] != 0 && strchr(cfg_stru[c_thumb_gen], source) != NULL) {
       if (source == 'v')
          xcount = video_cnt;
       else if (source == 'i')
@@ -896,8 +946,8 @@ void thumb_create(char *from_filename, char source) {
          xcount = image2_cnt;
       
       asprintf(&filename, "%s", from_filename);
-      if (strncmp(filename, media_path, strlen(media_path)) == 0) {
-         f = filename + strlen(media_path) + 1;
+      if (strncmp(filename, cfg_stru[c_media_path], strlen(cfg_stru[c_media_path])) == 0) {
+         f = filename + strlen(cfg_stru[c_media_path]) + 1;
          //remove .h264 if present
          if (strcmp((f + strlen(f) - 5), ".h264") == 0) {
             *(f + strlen(f) - 5) = 0; 
@@ -906,13 +956,13 @@ void thumb_create(char *from_filename, char source) {
          do {
             t = strchr(s, '/');
             if (t != NULL) {
-               *t = subdir_char;
+               *t = *cfg_stru[c_subdir_char];
                s = t + 1;
             }
          } while (t != NULL);
          //generate thumbnail name
-         asprintf(&thumb_name, "%s/%s.%c%04d.th.jpg", media_path, f, source, xcount);
-         copy_file(jpeg_filename, thumb_name);
+         asprintf(&thumb_name, "%s/%s.%c%04d.th.jpg", cfg_stru[c_media_path], f, source, xcount);
+         copy_file(cfg_stru[c_preview_path], thumb_name);
          free(thumb_name);
       }
       free(filename);
@@ -925,14 +975,14 @@ void capt_img (void) {
 
    currTime = time(NULL);
    localTime = localtime (&currTime);
-   if(timelapse && strlen(lapse_filename) > 10) {
-      makeFilename(&filename_temp, lapse_filename);
+   if(timelapse && strlen(cfg_stru[c_lapse_path]) > 10) {
+      makeFilename(&filename_temp, cfg_stru[c_lapse_path]);
       if (lapse_cnt == 1) {
          //Only first capture of a lapse sequence
          thumb_create(filename_temp, 't');
       }
    } else {
-      makeFilename(&filename_temp, jpeg2_filename);
+      makeFilename(&filename_temp, cfg_stru[c_image_path]);
       thumb_create(filename_temp, 'i');
    }
    createMediaPath(filename_temp);
@@ -942,9 +992,9 @@ void capt_img (void) {
       status = mmal_port_parameter_set_boolean(camera->output[2], MMAL_PARAMETER_CAPTURE, 1);
       if(status == MMAL_SUCCESS) {
          printf("Capturing image\n");
-         if(status_filename != 0) {
+         if(cfg_stru[c_status_file] != 0) {
             if(!timelapse) {
-               status_file = fopen(status_filename, "w");
+               status_file = fopen(cfg_stru[c_status_file], "w");
                fprintf(status_file, "image");
                fclose(status_file);
             }
@@ -973,12 +1023,12 @@ void start_video(void) {
       if(status != MMAL_SUCCESS) {error("Could not enable connection camera -> video converter", 0); return;}
       currTime = time(NULL);
       localTime = localtime (&currTime);
-      if(mp4box != 0) {
-         makeFilename(&filename_recording, h264_filename);
+      if(cfg_val[c_MP4Box] != 0) {
+         makeFilename(&filename_recording, cfg_stru[c_video_path]);
          asprintf(&filename_temp, "%s.h264", filename_recording);
       }
       else {
-         makeFilename(&filename_temp, h264_filename);
+         makeFilename(&filename_temp, cfg_stru[c_video_path]);
       }
       thumb_create(filename_temp, 'v');
       createMediaPath(filename_temp);
@@ -997,9 +1047,9 @@ void start_video(void) {
       mmal_port_parameter_set_boolean(camera->output[1], MMAL_PARAMETER_CAPTURE, 1);
       if(status != MMAL_SUCCESS) {error("Could not start capture", 0); return;}
       printf("Capturing started\n");
-      if(status_filename != 0) {
-         status_file = fopen(status_filename, "w");
-         if(!motion_detection) fprintf(status_file, "video");
+      if(cfg_stru[c_status_file] != 0) {
+         status_file = fopen(cfg_stru[c_status_file], "w");
+         if(!cfg_val[c_motion_detection]) fprintf(status_file, "video");
          else fprintf(status_file, "md_video");
          fclose(status_file);
       }
@@ -1024,35 +1074,34 @@ void stop_video(void) {
       fclose(h264output_file);
       h264output_file = NULL;
       printf("Capturing stopped\n");
-      if(mp4box) {
+      if(cfg_val[c_MP4Box]) {
          asprintf(&filename_temp, "%s.h264", filename_recording);
-         if(mp4box == 1) {
+         if(cfg_val[c_MP4Box] == 1) {
             printf("Boxing started\n");
-            status_file = fopen(status_filename, "w");
-            if(!motion_detection) fprintf(status_file, "boxing");
+            status_file = fopen(cfg_stru[c_status_file], "w");
+            if(!cfg_val[c_motion_detection]) fprintf(status_file, "boxing");
             else fprintf(status_file, "md_boxing");
             fclose(status_file);
             background = ' ';
          } else {
             background = '&';
          }
-         asprintf(&cmd_temp, "(MP4Box -fps %i -add %s.h264 %s > /dev/null;rm \"%s\";) %c", MP4Box_fps, filename_recording, filename_recording, filename_temp, background);
-         if(mp4box == 1) {
+         asprintf(&cmd_temp, "(MP4Box -fps %i -add %s.h264 %s > /dev/null;rm \"%s\";) %c", cfg_val[c_MP4Box_fps], filename_recording, filename_recording, filename_temp, background);
+         if(cfg_val[c_MP4Box] == 1) {
             if(system(cmd_temp) == -1) error("Could not start MP4Box", 0);
             printf("Boxing operation stopped\n");
          } else {
             system(cmd_temp);
-            printf("Boxing in background");
+            printf("Boxing in background\n");
          }
-         //remove(filename_temp);
          free(filename_temp);
          free(filename_recording);
          free(cmd_temp);
       }
       video_cnt++;
-      if(status_filename != 0) {
-         status_file = fopen(status_filename, "w");
-         if(!motion_detection) fprintf(status_file, "ready");
+      if(cfg_stru[c_status_file] != 0) {
+         status_file = fopen(cfg_stru[c_status_file], "w");
+         if(!cfg_val[c_motion_detection]) fprintf(status_file, "ready");
          else fprintf(status_file, "md_ready");
          fclose(status_file);
       }
@@ -1060,7 +1109,68 @@ void stop_video(void) {
    }
 }
 
-void read_config(char *cfilename) {
+int getKey(char *key) {
+   int i;
+   for(i=0; i < KEY_COUNT; i++) {
+      if(strcmp(key, cfg_key[i]) == 0) {
+         break;
+      }
+   }
+   return i;
+}
+
+void addValue(int keyI, char *value, int both){
+   long int val=strtol(value, NULL, 10);;
+
+   if (cfg_stru[keyI] != 0) free(cfg_stru[keyI]);
+   asprintf(&cfg_stru[keyI],"%s", value);
+   if (both) {
+      if (cfg_strd[keyI] != 0) free(cfg_strd[keyI]);
+      asprintf(&cfg_strd[keyI],"%s", value);
+   }
+   if (strcmp(value, "true") == 0)
+      val = 1;
+   else if (strcmp(value, "false") == 0)
+      val = 0;
+   switch(keyI) {
+      case c_autostart:
+         if(strcmp(value, "idle") == 0) {
+            val = 0;
+            idle = 1;
+         }else if(strcmp(value, "standard") == 0) { 
+            val = 1;
+            idle = 0;
+         };
+         break;
+      case c_MP4Box:
+         if(strcmp(value, "background") == 0)
+            val = 2;
+   }
+   cfg_val[keyI] = val;
+}
+
+void addUserValue(int key, char *value){
+   printf("Change: %s = %s\n", cfg_key[key], value);
+   addValue(key, value, 0);
+}
+
+void saveUserConfig(char *cfilename) {
+   FILE *fp;
+   int i;
+   fp = fopen(cfilename, "w");
+   if(fp != NULL) {
+      for(i = 0; i < KEY_COUNT; i++) {
+         if(strlen(cfg_key[i]) > 0) {
+            if(strcmp(cfg_strd[i], cfg_stru[i]) != 0) {
+               fprintf(fp, "%s %s\n", cfg_key[i], cfg_stru[i]);
+            }
+         }
+      }
+      fclose(fp);
+   }
+}
+
+void read_config(char *cfilename, int type) {
    FILE *fp;
    int length;
    unsigned int len = 0;
@@ -1077,204 +1187,8 @@ void read_config(char *cfilename) {
             *value = 0;
             value++;
             value = trim(value);
-
             if (strlen(line) > 0 && *line != '#' && strlen(value) > 0) {
-               if(strcmp(line, "width") == 0) {
-                  width = atoi(value);
-               }
-               else if(strcmp(line, "quality") == 0) {
-                  quality = atoi(value);
-               }
-               else if(strcmp(line, "divider") == 0) {
-                  divider = atoi(value);
-               }
-               else if(strcmp(line, "media_path") == 0) {
-                  if (media_path != 0) free(media_path);
-                  asprintf(&media_path, "%s", value);
-               }
-               else if(strcmp(line, "preview_path") == 0) {
-                  if (jpeg_filename != 0) free(jpeg_filename);
-                  asprintf(&jpeg_filename, "%s", value);
-               }
-               else if(strcmp(line, "image_path") == 0) {
-                  if (jpeg2_filename != 0) free(jpeg2_filename);
-                  asprintf(&jpeg2_filename, "%s", value);
-               }
-               else if(strcmp(line, "lapse_path") == 0) {
-                  if (lapse_filename != 0) free(lapse_filename);
-                  asprintf(&lapse_filename, "%s", value);
-               }
-               else if(strcmp(line, "video_path") == 0) {
-                  if (h264_filename != 0) free(h264_filename);
-                  asprintf(&h264_filename, "%s", value);
-               }
-               else if(strcmp(line, "status_file") == 0) {
-                  if (status_filename != 0) free(status_filename);
-                  asprintf(&status_filename, "%s", value);
-               }
-               else if(strcmp(line, "thumb_gen") == 0) {
-                  if (thumb_gen != 0) free(thumb_gen);
-                  asprintf(&thumb_gen, "%s", value);
-               }
-               else if(strcmp(line, "control_file") == 0) {
-                  if (pipe_filename != 0) free(pipe_filename);
-                  asprintf(&pipe_filename, "%s", value);
-               }
-               else if(strcmp(line, "annotation") == 0) {
-                  if (cam_setting_annotation != 0) free(cam_setting_annotation);
-                  asprintf(&cam_setting_annotation, "%s", value);
-               }
-               else if(strcmp(line, "user_config") == 0) {
-                  if (user_config != 0) free(user_config);
-                  asprintf(&user_config, "%s", value);
-               }
-               else if(strcmp(line, "anno_background") == 0) {
-                  if(strcmp(value, "true") == 0) cam_setting_annback = 1;
-               }
-               else if(strcmp(line, "MP4Box") == 0) {
-                  if(strcmp(value, "true") == 0) mp4box = 1;
-                  else if(strcmp(value, "false") == 0) mp4box = 0;
-                  else if(strcmp(value, "background") == 0) mp4box = 2;
-                  else mp4box = atoi(value);
-               }
-               else if(strcmp(line, "autostart") == 0) {
-                  if(strcmp(value, "idle") == 0) {
-                     autostart = 0;
-                     idle = 1;
-                  }
-               }
-               else if(strcmp(line, "motion_detection") == 0) {
-                  if(strcmp(value, "true") == 0) motion_detection = 1;
-               }
-               else if(strcmp(line, "sharpness") == 0) {
-                  cam_setting_sharpness = atoi(value);
-               }
-               else if(strcmp(line, "contrast") == 0) {
-                  cam_setting_contrast = atoi(value);
-               }
-               else if(strcmp(line, "brightness") == 0) {
-                  cam_setting_brightness = atoi(value);
-               }
-               else if(strcmp(line, "saturation") == 0) {
-                  cam_setting_saturation = atoi(value);
-               }
-               else if(strcmp(line, "iso") == 0) {
-                  cam_setting_iso = atoi(value);
-               }
-               else if(strcmp(line, "video_stabilisation") == 0) {
-                  if(strcmp(value, "true") == 0) cam_setting_vs = 1;
-               }
-               else if(strcmp(line, "exposure_compensation") == 0) {
-                  cam_setting_ec = atoi(value);
-               }
-               else if(strcmp(line, "exposure_mode") == 0) {
-                  sprintf(cam_setting_em, "%s", value);
-               }
-               else if(strcmp(line, "white_balance") == 0) {
-                  sprintf(cam_setting_wb, "%s", value);
-               }
-               else if(strcmp(line, "metering_mode") == 0) {
-                  sprintf(cam_setting_mm, "%s", value);
-               }
-               else if(strcmp(line, "image_effect") == 0) {
-                  sprintf(cam_setting_ie, "%s", value);
-               }
-               else if(strcmp(line, "colour_effect_en") == 0) {
-                  if(strcmp(value, "true") == 0) cam_setting_ce_en = 1;
-               }
-               else if(strcmp(line, "colour_effect_u") == 0) {
-                  cam_setting_ce_u = atoi(value);
-               }
-               else if(strcmp(line, "colour_effect_v") == 0) {
-                  cam_setting_ce_v = atoi(value);
-               }
-               else if(strcmp(line, "rotation") == 0) {
-                  cam_setting_rotation = atoi(value);
-               }
-               else if(strcmp(line, "hflip") == 0) {
-                  if(strcmp(value, "true") == 0) cam_setting_hflip = 1;
-               }
-               else if(strcmp(line, "vflip") == 0) {
-                  if(strcmp(value, "true") == 0) cam_setting_vflip = 1;
-               }
-               else if(strcmp(line, "sensor_region_x") == 0) {
-                  cam_setting_roi_x = strtoull(value, NULL, 0);
-               }
-               else if(strcmp(line, "sensor_region_y") == 0) {
-                  cam_setting_roi_y = strtoull(value, NULL, 0);
-               }
-               else if(strcmp(line, "sensor_region_w") == 0) {
-                  cam_setting_roi_w = strtoull(value, NULL, 0);
-               }
-               else if(strcmp(line, "sensor_region_h") == 0) {
-                  cam_setting_roi_h = strtoull(value, NULL, 0);
-               }
-               else if(strcmp(line, "shutter_speed") == 0) {
-                  cam_setting_ss = strtoull(value, NULL, 0);
-               }
-               else if(strcmp(line, "image_quality") == 0) {
-                  cam_setting_quality = atoi(value);
-               }
-               else if(strcmp(line, "raw_layer") == 0) {
-                  if(strcmp(value, "true") == 0) cam_setting_raw = 1;
-               }
-               else if(strcmp(line, "video_bitrate") == 0) {
-                  cam_setting_bitrate = strtoull(value, NULL, 0);
-               }
-               else if(strcmp(line, "video_width") == 0) {
-                  video_width = atoi(value);
-               }
-               else if(strcmp(line, "video_height") == 0) {
-                  video_height = atoi(value);
-               }
-               else if(strcmp(line, "video_fps") == 0) {
-                  video_fps = atoi(value);
-               }
-               else if(strcmp(line, "MP4Box_fps") == 0) {
-                  MP4Box_fps = atoi(value);
-               }
-               else if(strcmp(line, "image_width") == 0) {
-                  image_width = atoi(value);
-               }
-               else if(strcmp(line, "image_height") == 0) {
-                  image_height = atoi(value);
-               }
-               else if(strcmp(line, "subdir_char") == 0) {
-                  subdir_char = *value;
-               }
-               else if(strcmp(line, "anno_version") == 0) {
-                  anno_version = atoi(value);
-               }
-               else if(strcmp(line, "anno_text_size") == 0) {
-                  anno3_text_size = atoi(value);
-               }
-               else if(strcmp(line, "anno3_custom_background_colour") == 0) {
-                  anno3_custom_background[0] = atoi(value);
-               }
-               else if(strcmp(line, "anno3_custom_background_Y") == 0) {
-                  anno3_custom_background[1] = atoi(value);
-               }
-               else if(strcmp(line, "anno3_custom_background_U") == 0) {
-                  anno3_custom_background[2] = atoi(value);
-               }
-               else if(strcmp(line, "anno3_custom_background_V") == 0) {
-                  anno3_custom_background[3] = atoi(value);
-               }
-               else if(strcmp(line, "anno3_custom_text_colour") == 0) {
-                  anno3_custom_text[0] = atoi(value);
-               }
-               else if(strcmp(line, "anno3_custom_text_Y") == 0) {
-                  anno3_custom_text[1] = atoi(value);
-               }
-               else if(strcmp(line, "anno3_custom_text_U") == 0) {
-                  anno3_custom_text[2] = atoi(value);
-               }
-               else if(strcmp(line, "anno3_custom_text_V") == 0) {
-                  anno3_custom_text[3] = atoi(value);
-               }
-               else {
-                 printf("Unknown command in config file: %s\n", line);
-               }
+               addValue(getKey(line), value, type);
             }
          }
       }
@@ -1284,12 +1198,14 @@ void read_config(char *cfilename) {
 
 
 void process_cmd(char *readbuf, int length) {
-   typedef enum pipe_cmd_type{ca,im,tl,px,bo,an,av,as,at,ac,ab,sh,co,br,sa,is,vs,rl,ec,em,wb,mm,ie,ce,ro,fl,ri,ss,qu,bl,ru,md} pipe_cmd_type;
-   char pipe_cmds[] = "ca,im,tl,px,bo,an,av,as,at,ac,ab,sh,co,br,sa,is,vs,rl,ec,em,wb,mm,ie,ce,ro,fl,ri,ss,qu,bl,ru,md";
+   typedef enum pipe_cmd_type{ca,im,tl,px,bo,tv,an,av,as,at,ac,ab,sh,co,br,sa,is,vs,rl,ec,em,wb,mm,ie,ce,ro,fl,ri,ss,qu,bl,ru,md,sc,rs} pipe_cmd_type;
+   char pipe_cmds[] = "ca,im,tl,px,bo,tv,an,av,as,at,ac,ab,sh,co,br,sa,is,vs,rl,ec,em,wb,mm,ie,ce,ro,fl,ri,ss,qu,bl,ru,md,sc,rs";
    pipe_cmd_type pipe_cmd;
    int i;
-   unsigned long int pars[10];
+   char pars[128][10];
+   long int par0;
    char *parstring=0, *temp;
+   int key = -1;
    
    //Sanitise buffer and return if no good
    if (length == 2) length++;
@@ -1308,14 +1224,15 @@ void process_cmd(char *readbuf, int length) {
    i = 0;
    temp = strtok(readbuf+3, " ");
    while(i<10 && temp != NULL) {
-      pars[i] = strtoull(temp, NULL, 10);
+      strcpy(pars[i], temp);
       i++;
       temp = strtok(NULL, " ");
    }
+   par0 = strtol(pars[0], NULL, 10);
    
    switch(pipe_cmd) {
       case ca:
-         if(pars[0] == 1) {
+         if(par0 == 1) {
             start_video();
          }  else {
             stop_video();
@@ -1325,10 +1242,9 @@ void process_cmd(char *readbuf, int length) {
          capt_img();
          break;
       case tl:
-         time_between_pic = (int)pars[0];
-         if(time_between_pic) {
-            if(status_filename != 0) {
-               status_file = fopen(status_filename, "w");
+         if(par0) {
+            if(cfg_stru[c_status_file] != 0) {
+               status_file = fopen(cfg_stru[c_status_file], "w");
                fprintf(status_file, "timelapse");
                fclose(status_file);
             }
@@ -1337,9 +1253,9 @@ void process_cmd(char *readbuf, int length) {
             printf("Timelapse started\n");
          }
          else {
-            if(status_filename != 0) {
-              status_file = fopen(status_filename, "w");
-              if(!motion_detection) fprintf(status_file, "ready");
+            if(cfg_stru[c_status_file] != 0) {
+              status_file = fopen(cfg_stru[c_status_file], "w");
+              if(!cfg_val[c_motion_detection]) fprintf(status_file, "ready");
               else fprintf(status_file, "md_ready");
               fclose(status_file);
             }
@@ -1350,158 +1266,116 @@ void process_cmd(char *readbuf, int length) {
          break;
       case px:
          stop_all();
-         video_width = (unsigned int)pars[0];
-         video_height = (unsigned int)pars[1];
-         video_fps = (unsigned int)pars[2];
-         MP4Box_fps = (unsigned int)pars[3];
-         image_width = (unsigned int)pars[4];
-         image_height = (unsigned int)pars[5];
+         addUserValue(c_video_width, pars[0]);
+         addUserValue(c_video_height, pars[1]);
+         addUserValue(c_video_fps, pars[2]);
+         addUserValue(c_MP4Box_fps, pars[3]);
+         addUserValue(c_image_width, pars[4]);
+         addUserValue(c_image_height, pars[5]);
          start_all(0);
-         printf("Changed resolutions and framerates\n");
          break;
       case bo:
-         mp4box = (unsigned int)pars[0];
-         if (mp4box > 2) mp4box = 2;
-         printf("MP4Box mode changed\n");
+         addUserValue(c_MP4Box, pars[0]);
+         break;
+      case tv:
+         addUserValue(c_tl_interval, pars[0]);
          break;
       case an:
-         asprintf(&cam_setting_annotation, "%s", parstring);
-         printf("Annotation changed\n");
+         addUserValue(c_annotation, parstring);
          break;
       case av:
-         anno_version = (unsigned int)pars[0];
-         printf("Annotation version changed\n");
+         addUserValue(c_anno_version, pars[0]);
          break;
       case as:
-         anno3_text_size = (unsigned int)pars[0];
-         printf("Annotation text size changed\n");
+         addUserValue(c_anno_text_size, pars[0]);
          break;
       case at:
-         anno3_custom_text[0] = (unsigned int)pars[0];
-         anno3_custom_text[1] = (unsigned int)pars[1];
-         anno3_custom_text[2] = (unsigned int)pars[2];
-         anno3_custom_text[3] = (unsigned int)pars[3];
-         printf("Annotation custom text colour changed\n");
+         addUserValue(c_anno3_custom_text_colour, pars[0]);
+         addUserValue(c_anno3_custom_text_Y, pars[1]);
+         addUserValue(c_anno3_custom_text_U, pars[2]);
+         addUserValue(c_anno3_custom_text_V, pars[3]);
          break;
       case ac:
-         anno3_custom_background[0] = (unsigned int)pars[0];
-         anno3_custom_background[1] = (unsigned int)pars[1];
-         anno3_custom_background[2] = (unsigned int)pars[2];
-         anno3_custom_background[3] = (unsigned int)pars[3];
-         printf("Annotation custom background colour changed\n");
+         addUserValue(c_anno3_custom_background_colour, pars[0]);
+         addUserValue(c_anno3_custom_background_Y, pars[1]);
+         addUserValue(c_anno3_custom_background_U, pars[2]);
+         addUserValue(c_anno3_custom_background_V, pars[3]);
          break;
       case ab:
-         cam_setting_annback = (pars[0] == 0)?0:1;
-         printf("Annotation background changed\n");
+         addUserValue(c_anno_background, pars[0]);
          break;
       case sh:
-         cam_setting_sharpness = (unsigned int)pars[0];
-         cam_set_sharpness();
-         printf("Sharpness: %d\n", cam_setting_sharpness);
+         key = c_sharpness;
          break;
       case co:
-         cam_setting_contrast = (unsigned int)pars[0];
-         cam_set_contrast();
-         printf("Contrast: %d\n", cam_setting_contrast);
+         key = c_contrast;
          break;
       case br:
-         cam_setting_brightness = (unsigned int)pars[0];
-         cam_set_brightness();
-         printf("Brightness: %d\n", cam_setting_brightness);
+         key = c_brightness;
          break;
       case sa:
-         cam_setting_saturation = (unsigned int)pars[0];
-         cam_set_saturation();
-         printf("Saturation: %d\n", cam_setting_saturation);
+         key = c_saturation;
          break;
       case is:
-         cam_setting_iso = (unsigned int)pars[0];
-         cam_set_iso();
-         printf("ISO: %d\n", cam_setting_iso);
+         key = c_iso;
          break;
       case vs:
-         cam_setting_vs = (pars[0] == 1)?1:0;
-         cam_set_vs();
-         printf("Changed video stabilisation\n");
+         key = c_video_stabilisation;
          break;
       case rl:
-         cam_setting_raw = (pars[0] == 1)?1:0;
-         cam_set_raw();
-         printf("Changed raw layer\n");
+         key = c_raw_layer;
          break;
       case ec:
-         cam_setting_ec = (unsigned int)pars[0];
-         cam_set_ec();
-         printf("Exposure compensation: %d\n", cam_setting_ec);
+         key = 1000 + c_exposure_compensation;
          break;
       case em:
-         sprintf(cam_setting_em, "%s", parstring);
-         cam_set_em();
-         printf("Exposure mode changed\n");
+         key = 1000 + c_exposure_mode;
          break;
       case wb:
-         sprintf(cam_setting_wb, "%s", parstring);
-         cam_set_wb();
-         printf("White balance changed\n");
+         key = 1000 + c_white_balance;
          break;
       case mm:
-         sprintf(cam_setting_mm, "%s", parstring);
-         cam_set_mm();
-         printf("Metering mode changed\n");
+         key = 1000 + c_metering_mode;
          break;
       case ie:
-         sprintf(cam_setting_ie, "%s", parstring);
-         cam_set_ie();
-         printf("Image effect changed\n");
+         key = 1000 + c_image_effect;
          break;
       case ce:
-         cam_setting_ce_en = (unsigned int)pars[0];
-         cam_setting_ce_u = (unsigned int)pars[1];
-         cam_setting_ce_v = (unsigned int)pars[2];;
-         cam_set_ce();
-         printf("Colour effect changed\n");
+         addUserValue(c_colour_effect_u, pars[1]);
+         addUserValue(c_colour_effect_v, pars[2]);
+         key = c_colour_effect_en;
          break;
       case ro:
-         cam_setting_rotation = (unsigned int)pars[0];
-         cam_set_rotation();
-         printf("Rotation: %d\n", cam_setting_rotation);
+         key = c_rotation;
          break;
       case fl:
-         cam_setting_hflip = pars[0] & 1;
-         cam_setting_vflip = pars[0] >> 1;
-         cam_set_flip();
-         printf("Flip changed\n");
+         if(par0 & 1) addUserValue(c_hflip, "1"); else addUserValue(c_hflip, "0"); 
+         if((par0 >> 1) & 1) addUserValue(c_vflip, "1"); else addUserValue(c_vflip, "0"); 
+         cam_set(c_hflip);
          break;
       case ri:
-         cam_setting_roi_x = pars[0];
-         cam_setting_roi_y = pars[1];
-         cam_setting_roi_w = pars[2];
-         cam_setting_roi_h = pars[3];
-         cam_set_roi();
-         printf("Changed Sensor Region\n");
+         addUserValue(c_sensor_region_y, pars[0]);
+         addUserValue(c_sensor_region_w, pars[0]);
+         addUserValue(c_sensor_region_h, pars[0]);
+         key = c_sensor_region_x;
          break;
       case ss:
-         cam_setting_ss = pars[0];
-         cam_set_ss();
-         printf("Shutter Speed: %lu\n", cam_setting_ss);
+         addUserValue(c_shutter_speed, pars[0]);
+         key = c_shutter_speed;
          break;
       case qu:
-         cam_setting_quality = (unsigned int)pars[0];
-         cam_set_quality();
-         printf("Quality: %d\n", cam_setting_quality);
+         key = c_image_quality;
          break;
       case bl:
-         cam_setting_bitrate = pars[0];
-         cam_set_bitrate();
-         printf("Bitrate: %lu\n", cam_setting_bitrate);
+         key = c_video_bitrate;
          break;
       case ru:
-         if (pars[0] == 0) {
+         if (par0 == 0) {
             stop_all();
             idle = 1;
             printf("Stream halted\n");
-            if(status_filename != 0) {
-              status_file = fopen(status_filename, "w");
+            if(cfg_stru[c_status_file] != 0) {
+              status_file = fopen(cfg_stru[c_status_file], "w");
               fprintf(status_file, "halted");
               fclose(status_file);
             }
@@ -1509,39 +1383,62 @@ void process_cmd(char *readbuf, int length) {
             start_all(1);
             idle = 0;
             printf("Stream continued\n");
-            if(status_filename != 0) {
-              status_file = fopen(status_filename, "w");
+            if(cfg_stru[c_status_file] != 0) {
+              status_file = fopen(cfg_stru[c_status_file], "w");
               fprintf(status_file, "ready");
               fclose(status_file);
             }
          }
          break;
       case md:
-         if(pars[0]==0) {
-            motion_detection = 0;
+         if(par0 == 0) {
+            cfg_val[c_motion_detection] = 0;
             if(system("killall motion") == -1) error("Could not stop Motion", 1);
             printf("Motion detection stopped\n");
-            if(status_filename != 0) {
-               status_file = fopen(status_filename, "w");
+            if(cfg_stru[c_status_file] != 0) {
+               status_file = fopen(cfg_stru[c_status_file], "w");
                fprintf(status_file, "ready");
                fclose(status_file);
             }
          }
          else {
-            motion_detection = 1;
+            cfg_val[c_motion_detection] = 1;
             if(system("motion") == -1) error("Could not start Motion", 1);
             printf("Motion detection started\n");
-            if(status_filename != 0) {
-               status_file = fopen(status_filename, "w");
+            if(cfg_stru[c_status_file] != 0) {
+               status_file = fopen(cfg_stru[c_status_file], "w");
                fprintf(status_file, "md_ready");
                fclose(status_file);
             }
          }
          break;
+      case sc:
+         set_counts();
+         printf("Scan for highest count\n");
+         break;
+      case rs:
+         printf("Reset settings to defaults\n");
+         stop_all();
+         read_config("/etc/raspimjpeg", 1);
+         saveUserConfig(cfg_stru[c_user_config]);
+         start_all(0);
+         break;
       default:
          printf("Unrecognised pipe command\n");
          break;
    }
+   
+   //Action any key settings
+   if (key >= 0) {
+      if (key < 1000) {
+         addUserValue(key, pars[0]);
+         cam_set(key);
+      } else {
+         addUserValue(key - 1000, parstring);
+         cam_set(key - 1000);
+      }
+   }
+   saveUserConfig(cfg_stru[c_user_config]);
    if (parstring != 0) free(parstring);
 }
 
@@ -1614,36 +1511,33 @@ int main (int argc, char* argv[]) {
          exit(0);
       }
       else if(strcmp(argv[i], "-md") == 0) {
-         motion_detection = 1;
+         cfg_val[c_motion_detection] = 1;
       }
    }
 
    //default base media path
-   asprintf(&media_path, "%s", "/var/www/media");
+   asprintf(&cfg_stru[c_media_path], "%s", "/var/www/media");
    //
    // read configs and init
    //
-   read_config("/etc/raspimjpeg");
-   if (user_config != 0)
-      read_config(user_config);
+   read_config("/etc/raspimjpeg", 1);
+   if (cfg_stru[c_user_config] != 0)
+      read_config(cfg_stru[c_user_config], 0);
  
-   image2_cnt = findNextCount(jpeg2_filename, "it");
-   video_cnt = findNextCount(h264_filename, "v");
-
-   if(autostart) start_all(0);
-   if(motion_detection) {
+   if(cfg_val[c_autostart]) start_all(0);
+   if(cfg_val[c_motion_detection]) {
       if(system("motion") == -1) error("Could not start Motion", 1);
    }
 
    //
    // run
    //
-   if(autostart) {
-      if(pipe_filename != 0) printf("MJPEG streaming, ready to receive commands\n");
+   if(cfg_val[c_autostart]) {
+      if(cfg_stru[c_control_file] != 0) printf("MJPEG streaming, ready to receive commands\n");
       else printf("MJPEG streaming\n");
    }
    else {
-      if(pipe_filename != 0) printf("MJPEG idle, ready to receive commands\n");
+      if(cfg_stru[c_control_file] != 0) printf("MJPEG idle, ready to receive commands\n");
       else printf("MJPEG idle\n");
    }
 
@@ -1653,11 +1547,11 @@ int main (int argc, char* argv[]) {
    sigaction(SIGTERM, &action, NULL);
    sigaction(SIGINT, &action, NULL);
   
-   if(status_filename != 0) {
-      status_file = fopen(status_filename, "w");
+   if(cfg_stru[c_status_file] != 0) {
+      status_file = fopen(cfg_stru[c_status_file], "w");
       if(!status_file) error("Could not open/create status-file", 1);
-      if(autostart) {
-         if(!motion_detection) {
+      if(cfg_val[c_autostart]) {
+         if(!cfg_val[c_motion_detection]) {
             fprintf(status_file, "ready");
          }
          else fprintf(status_file, "md_ready");
@@ -1668,7 +1562,7 @@ int main (int argc, char* argv[]) {
    
    //Clear out anything in FIFO first
    do {
-      fd = open(pipe_filename, O_RDONLY | O_NONBLOCK);
+      fd = open(cfg_stru[c_control_file], O_RDONLY | O_NONBLOCK);
       if(fd < 0) error("Could not open PIPE", 1);
       fcntl(fd, F_SETFL, 0);
       length = read(fd, readbuf, 60);
@@ -1677,9 +1571,9 @@ int main (int argc, char* argv[]) {
   
    // Main forever loop
    while(running) {
-      if(pipe_filename != 0) {
+      if(cfg_stru[c_control_file] != 0) {
 
-         fd = open(pipe_filename, O_RDONLY | O_NONBLOCK);
+         fd = open(cfg_stru[c_control_file], O_RDONLY | O_NONBLOCK);
          if(fd < 0) error("Could not open PIPE", 1);
          fcntl(fd, F_SETFL, 0);
          length = read(fd, readbuf, 60);
@@ -1692,7 +1586,7 @@ int main (int argc, char* argv[]) {
       }
       if(timelapse) {
          tl_cnt++;
-         if(tl_cnt >= time_between_pic) {
+         if(tl_cnt >= cfg_val[c_tl_interval]) {
             if(capturing == 0) {
                capt_img();
                tl_cnt = 0;

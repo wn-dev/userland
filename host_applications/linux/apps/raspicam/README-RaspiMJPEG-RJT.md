@@ -40,3 +40,7 @@ Added v3 annotation support
 March 24th 2015
 More tolerant error handling
 Background boxing mode
+
+April 3rd 2015
+Config handling rewritten to use an enumerated set of config names and corresponding string and variables.
+Now directly supports persisting changes to the user_config file.
