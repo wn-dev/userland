@@ -50,7 +50,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * Usage information in README_RaspiMJPEG.md
  */
 
-#define VERSION "4.2.3"
+#define VERSION "4.4.0"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -83,7 +83,7 @@ char *filename_recording = 0;
 unsigned char timelapse=0, running=1, autostart=1, idle=0, capturing=0;
 
 //hold config file data for both dflt and user config files and u long versions
-#define KEY_COUNT 60
+#define KEY_COUNT 61
 char *cfg_strd[KEY_COUNT + 1];
 char *cfg_stru[KEY_COUNT + 1];
 long int cfg_val[KEY_COUNT + 1];
@@ -102,7 +102,7 @@ char *cfg_key[] ={
    "MP4Box","MP4Box_fps",
    "image_width","image_height","image_quality","tl_interval",
    "preview_path","image_path","lapse_path","video_path","status_file","control_file","media_path","subdir_char",
-   "thumb_gen","autostart","motion_detection","user_config"
+   "thumb_gen","autostart","motion_detection","user_config","log_file"
 };
 
 typedef enum cfgkey_type
@@ -121,7 +121,7 @@ typedef enum cfgkey_type
    c_MP4Box,c_MP4Box_fps,
    c_image_width,c_image_height,c_image_quality,c_tl_interval,
    c_preview_path,c_image_path,c_lapse_path,c_video_path,c_status_file,c_control_file,c_media_path,c_subdir_char,
-   c_thumb_gen,c_autostart,c_motion_detection,c_user_config
+   c_thumb_gen,c_autostart,c_motion_detection,c_user_config,c_log_file
    } cfgkey_type; 
 
 time_t currTime;
@@ -131,9 +131,10 @@ void read_config(char *cfilename, int type);
 void cam_set_annotation();
 void makeFilename(char** filename, char *template);
 void createMediaPath(char* filename);
+void printLog(char *msg, ...);
 
 void error (const char *string, char fatal) {
-   printf("Error: %s\n", string);
+   printLog("Error: %s\n", string);
    if (fatal == 0)
       return;
    if(cfg_stru[c_status_file] != 0) {
@@ -422,20 +423,20 @@ void cam_set(int key) {
          control = 3;id = MMAL_PARAMETER_SHUTTER_SPEED;break;
       case c_rotation:
          status = mmal_port_parameter_set_int32(camera->output[0], MMAL_PARAMETER_ROTATION, cfg_val[c_rotation]);
-         if(status != MMAL_SUCCESS) printf("Could not set rotation (0)\n");
+         if(status != MMAL_SUCCESS) printLog("Could not set rotation (0)\n");
          status = mmal_port_parameter_set_int32(camera->output[1], MMAL_PARAMETER_ROTATION, cfg_val[c_rotation]);
-         if(status != MMAL_SUCCESS) printf("Could not set rotation (1)\n");
+         if(status != MMAL_SUCCESS) printLog("Could not set rotation (1)\n");
          status = mmal_port_parameter_set_int32(camera->output[2], MMAL_PARAMETER_ROTATION, cfg_val[c_rotation]);
-         if(status != MMAL_SUCCESS) printf("Could not set rotation (2)\n");
+         if(status != MMAL_SUCCESS) printLog("Could not set rotation (2)\n");
          break;
       case c_image_quality:
          status = mmal_port_parameter_set_uint32(jpegencoder2->output[0], MMAL_PARAMETER_JPEG_Q_FACTOR, cfg_val[c_image_quality]);
-         if(status != MMAL_SUCCESS) printf("Could not set quality\n");
+         if(status != MMAL_SUCCESS) printLog("Could not set quality\n");
          break;
       case c_video_bitrate:
          h264encoder->output[0]->format->bitrate = cfg_val[c_video_bitrate];
          status = mmal_port_format_commit(h264encoder->output[0]);
-         if(status != MMAL_SUCCESS) printf("Could not set bitrate\n");
+         if(status != MMAL_SUCCESS) printLog("Could not set bitrate\n");
          break;
       case c_exposure_mode:
          cam_set_em();
@@ -464,19 +465,19 @@ void cam_set(int key) {
       case 1: //rational
          value.num = cfg_val[key];
          status = mmal_port_parameter_set_rational(camera->control, id, value);
-         if(status != MMAL_SUCCESS) printf("Could not set %s\n", cfg_key[key]);
+         if(status != MMAL_SUCCESS) printLog("Could not set %s\n", cfg_key[key]);
          break;
       case 2: //int32
          status = mmal_port_parameter_set_int32(camera->control, id, cfg_val[key]);
-         if(status != MMAL_SUCCESS) printf("Could not set %s\n", cfg_key[key]);
+         if(status != MMAL_SUCCESS) printLog("Could not set %s\n", cfg_key[key]);
          break;
       case 3: //uint32
          status = mmal_port_parameter_set_uint32(camera->control, id, cfg_val[key]);
-         if(status != MMAL_SUCCESS) printf("Could not set %s\n", cfg_key[key]);
+         if(status != MMAL_SUCCESS) printLog("Could not set %s\n", cfg_key[key]);
          break;
       case 4: //boolean
          status = mmal_port_parameter_set_boolean(camera->control, id, cfg_val[key]);
-         if(status != MMAL_SUCCESS) printf("Could not set %s\n", cfg_key[key]);
+         if(status != MMAL_SUCCESS) printLog("Could not set %s\n", cfg_key[key]);
          break;
    }
 }
@@ -864,7 +865,7 @@ void createMediaPath(char* filename) {
             *t = 0;
             r = mkdir(filename, 0777);
             if (r !=0 && errno == EEXIST) {
-               chmod(filename, 0777);
+               chmod(filename, 0666);
                r = 0;
             } else if (r == 0) {
                chown(filename, buf.st_uid, buf.st_gid);
@@ -991,7 +992,7 @@ void capt_img (void) {
    if(jpegoutput2_file != NULL){ 
       status = mmal_port_parameter_set_boolean(camera->output[2], MMAL_PARAMETER_CAPTURE, 1);
       if(status == MMAL_SUCCESS) {
-         printf("Capturing image\n");
+         printLog("Capturing image\n");
          if(cfg_stru[c_status_file] != 0) {
             if(!timelapse) {
                status_file = fopen(cfg_stru[c_status_file], "w");
@@ -1046,7 +1047,7 @@ void start_video(void) {
       }
       mmal_port_parameter_set_boolean(camera->output[1], MMAL_PARAMETER_CAPTURE, 1);
       if(status != MMAL_SUCCESS) {error("Could not start capture", 0); return;}
-      printf("Capturing started\n");
+      printLog("Capturing started\n");
       if(cfg_stru[c_status_file] != 0) {
          status_file = fopen(cfg_stru[c_status_file], "w");
          if(!cfg_val[c_motion_detection]) fprintf(status_file, "video");
@@ -1073,11 +1074,11 @@ void stop_video(void) {
       if(status != MMAL_SUCCESS) error("Could not disable video converter", 1);
       fclose(h264output_file);
       h264output_file = NULL;
-      printf("Capturing stopped\n");
+      printLog("Capturing stopped\n");
       if(cfg_val[c_MP4Box]) {
          asprintf(&filename_temp, "%s.h264", filename_recording);
          if(cfg_val[c_MP4Box] == 1) {
-            printf("Boxing started\n");
+            printLog("Boxing started\n");
             status_file = fopen(cfg_stru[c_status_file], "w");
             if(!cfg_val[c_motion_detection]) fprintf(status_file, "boxing");
             else fprintf(status_file, "md_boxing");
@@ -1089,10 +1090,10 @@ void stop_video(void) {
          asprintf(&cmd_temp, "(MP4Box -fps %i -add %s.h264 %s > /dev/null;rm \"%s\";) %c", cfg_val[c_MP4Box_fps], filename_recording, filename_recording, filename_temp, background);
          if(cfg_val[c_MP4Box] == 1) {
             if(system(cmd_temp) == -1) error("Could not start MP4Box", 0);
-            printf("Boxing operation stopped\n");
+            printLog("Boxing operation stopped\n");
          } else {
             system(cmd_temp);
-            printf("Boxing in background\n");
+            printLog("Boxing in background\n");
          }
          free(filename_temp);
          free(filename_recording);
@@ -1150,7 +1151,7 @@ void addValue(int keyI, char *value, int both){
 }
 
 void addUserValue(int key, char *value){
-   printf("Change: %s = %s\n", cfg_key[key], value);
+   printLog("Change: %s = %s\n", cfg_key[key], value);
    addValue(key, value, 0);
 }
 
@@ -1161,7 +1162,7 @@ void saveUserConfig(char *cfilename) {
    if(fp != NULL) {
       for(i = 0; i < KEY_COUNT; i++) {
          if(strlen(cfg_key[i]) > 0) {
-            if(strcmp(cfg_strd[i], cfg_stru[i]) != 0) {
+            if(cfg_stru[i] != 0 && (cfg_strd[i] == 0 || strcmp(cfg_strd[i], cfg_stru[i]) != 0)) {
                fprintf(fp, "%s %s\n", cfg_key[i], cfg_stru[i]);
             }
          }
@@ -1250,7 +1251,7 @@ void process_cmd(char *readbuf, int length) {
             }
             timelapse = 1;
             lapse_cnt = 1;
-            printf("Timelapse started\n");
+            printLog("Timelapse started\n");
          }
          else {
             if(cfg_stru[c_status_file] != 0) {
@@ -1261,7 +1262,7 @@ void process_cmd(char *readbuf, int length) {
             }
             image2_cnt++;
             timelapse = 0;
-            printf("Timelapse stopped\n");
+            printLog("Timelapse stopped\n");
          }
          break;
       case px:
@@ -1373,7 +1374,7 @@ void process_cmd(char *readbuf, int length) {
          if (par0 == 0) {
             stop_all();
             idle = 1;
-            printf("Stream halted\n");
+            printLog("Stream halted\n");
             if(cfg_stru[c_status_file] != 0) {
               status_file = fopen(cfg_stru[c_status_file], "w");
               fprintf(status_file, "halted");
@@ -1382,7 +1383,7 @@ void process_cmd(char *readbuf, int length) {
          } else {
             start_all(1);
             idle = 0;
-            printf("Stream continued\n");
+            printLog("Stream continued\n");
             if(cfg_stru[c_status_file] != 0) {
               status_file = fopen(cfg_stru[c_status_file], "w");
               fprintf(status_file, "ready");
@@ -1394,7 +1395,7 @@ void process_cmd(char *readbuf, int length) {
          if(par0 == 0) {
             cfg_val[c_motion_detection] = 0;
             if(system("killall motion") == -1) error("Could not stop Motion", 1);
-            printf("Motion detection stopped\n");
+            printLog("Motion detection stopped\n");
             if(cfg_stru[c_status_file] != 0) {
                status_file = fopen(cfg_stru[c_status_file], "w");
                fprintf(status_file, "ready");
@@ -1404,7 +1405,7 @@ void process_cmd(char *readbuf, int length) {
          else {
             cfg_val[c_motion_detection] = 1;
             if(system("motion") == -1) error("Could not start Motion", 1);
-            printf("Motion detection started\n");
+            printLog("Motion detection started\n");
             if(cfg_stru[c_status_file] != 0) {
                status_file = fopen(cfg_stru[c_status_file], "w");
                fprintf(status_file, "md_ready");
@@ -1414,17 +1415,17 @@ void process_cmd(char *readbuf, int length) {
          break;
       case sc:
          set_counts();
-         printf("Scan for highest count\n");
+         printLog("Scan for highest count\n");
          break;
       case rs:
-         printf("Reset settings to defaults\n");
+         printLog("Reset settings to defaults\n");
          stop_all();
          read_config("/etc/raspimjpeg", 1);
          saveUserConfig(cfg_stru[c_user_config]);
          start_all(0);
          break;
       default:
-         printf("Unrecognised pipe command\n");
+         printLog("Unrecognised pipe command\n");
          break;
    }
    
@@ -1492,7 +1493,35 @@ int findNextCount(char* folder, char* source) {
       }
    }
    free(search);
-   return max_count + found;;
+   return max_count + found;
+}
+
+void printLog(char *msg, ...) {
+   char *timestamp;
+   va_list args;
+   va_start(args, msg);
+   int nofile;
+   FILE *fp;
+
+   if (cfg_stru[c_log_file] != 0) {
+      nofile = (access(cfg_stru[c_log_file], F_OK ) == -1 );
+      fp = fopen(cfg_stru[c_log_file], "a");
+   } else {
+      fp = stdout;
+   }
+   if (fp != NULL) {
+      currTime = time(NULL);
+      localTime = localtime (&currTime);
+      makeFilename(&timestamp, "{%Y/%M/%D %h:%m:%s} ");
+      fprintf(fp, "%s",timestamp);
+      vfprintf(fp, msg, args);
+      if (cfg_stru[c_log_file] != 0) {
+         fclose(fp);
+         if (nofile) chmod(cfg_stru[c_log_file], 0666);
+      }
+      if (timestamp != 0) free(timestamp);
+   }
+   va_end(args);
 }
 
 int main (int argc, char* argv[]) {
@@ -1505,10 +1534,11 @@ int main (int argc, char* argv[]) {
    //
    for(i=1; i<argc; i++) {
       if(strcmp(argv[i], "--version") == 0) {
-         printf("RaspiMJPEG Version ");
-         printf(VERSION);
-         printf("\n");
+         printf("RaspiMJPEG Version %s\n", VERSION);
          exit(0);
+      }
+      else if(strcmp(argv[i], "-md") == 0) {
+         cfg_val[c_motion_detection] = 1;
       }
       else if(strcmp(argv[i], "-md") == 0) {
          cfg_val[c_motion_detection] = 1;
@@ -1523,7 +1553,9 @@ int main (int argc, char* argv[]) {
    read_config("/etc/raspimjpeg", 1);
    if (cfg_stru[c_user_config] != 0)
       read_config(cfg_stru[c_user_config], 0);
- 
+
+   printLog("RaspiMJPEG Version %s\n", VERSION);
+   
    if(cfg_val[c_autostart]) start_all(0);
    if(cfg_val[c_motion_detection]) {
       if(system("motion") == -1) error("Could not start Motion", 1);
@@ -1533,12 +1565,12 @@ int main (int argc, char* argv[]) {
    // run
    //
    if(cfg_val[c_autostart]) {
-      if(cfg_stru[c_control_file] != 0) printf("MJPEG streaming, ready to receive commands\n");
-      else printf("MJPEG streaming\n");
+      if(cfg_stru[c_control_file] != 0) printLog("MJPEG streaming, ready to receive commands\n");
+      else printLog("MJPEG streaming\n");
    }
    else {
-      if(cfg_stru[c_control_file] != 0) printf("MJPEG idle, ready to receive commands\n");
-      else printf("MJPEG idle\n");
+      if(cfg_stru[c_control_file] != 0) printLog("MJPEG idle, ready to receive commands\n");
+      else printLog("MJPEG idle\n");
    }
 
    struct sigaction action;
@@ -1596,7 +1628,7 @@ int main (int argc, char* argv[]) {
       usleep(100000);
    }
   
-   printf("SIGINT/SIGTERM received, stopping\n");
+   printLog("SIGINT/SIGTERM received, stopping\n");
    //
    // tidy up
    //

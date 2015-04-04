@@ -44,3 +44,6 @@ Background boxing mode
 April 3rd 2015
 Config handling rewritten to use an enumerated set of config names and corresponding string and variables.
 Now directly supports persisting changes to the user_config file.
+
+April 4th 2015
+Supports writing to a log file
