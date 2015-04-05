@@ -47,3 +47,7 @@ Now directly supports persisting changes to the user_config file.
 
 April 4th 2015
 Supports writing to a log file
+
+April 5th 2015
+Centralised status updates
+Allowed image capture in video mode

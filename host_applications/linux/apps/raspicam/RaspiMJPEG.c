@@ -80,7 +80,7 @@ FILE *jpegoutput_file = NULL, *jpegoutput2_file = NULL, *h264output_file = NULL,
 MMAL_POOL_T *pool_jpegencoder, *pool_jpegencoder2, *pool_h264encoder;
 unsigned int tl_cnt=0, mjpeg_cnt=0, image_cnt=0, image2_cnt=0, lapse_cnt=0, video_cnt=0;
 char *filename_recording = 0;
-unsigned char timelapse=0, running=1, autostart=1, idle=0, capturing=0;
+unsigned char timelapse=0, running=1, autostart=1, idle=0, a_error=0, v_capturing=0, i_capturing=0, v_boxing=0;
 
 //hold config file data for both dflt and user config files and u long versions
 #define KEY_COUNT 61
@@ -133,17 +133,56 @@ void makeFilename(char** filename, char *template);
 void createMediaPath(char* filename);
 void printLog(char *msg, ...);
 
+void updateStatus() {
+   char status[20];
+   
+   if(cfg_stru[c_status_file] != 0) {
+      
+      if (a_error) {
+         strcpy(status, "Error");
+      }
+      else if (idle) {
+         strcpy(status, "halted");
+      }
+      else if (i_capturing) {
+         strcpy(status, "image");
+      }
+      else if (v_capturing) {
+         if(!cfg_val[c_motion_detection]) 
+            strcpy(status, "video");
+         else
+            strcpy(status, "md_video");
+      }
+      else if (timelapse) {
+         strcpy(status, "timelapse");
+      }
+      else if (v_boxing) {
+         if(!cfg_val[c_motion_detection]) 
+            strcpy(status, "boxing");
+         else
+            strcpy(status, "md_boxing");
+      }
+      else {
+         if(!cfg_val[c_motion_detection]) 
+            strcpy(status, "ready");
+         else
+            strcpy(status, "md_ready");
+      }
+      
+      status_file = fopen(cfg_stru[c_status_file], "w");
+      if(status_file) {
+         fprintf(status_file, status);
+         fclose(status_file);
+      }
+   }
+}
+
 void error (const char *string, char fatal) {
    printLog("Error: %s\n", string);
    if (fatal == 0)
       return;
-   if(cfg_stru[c_status_file] != 0) {
-      status_file = fopen(cfg_stru[c_status_file], "w");
-      if(status_file) {
-         fprintf(status_file, "Error: %s", string);
-         fclose(status_file);
-      }
-   }
+   a_error = 1;
+   updateStatus();
    exit(1);
 }
 
@@ -229,18 +268,12 @@ static void jpegencoder2_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_
    if(buffer->flags & MMAL_BUFFER_HEADER_FLAG_FRAME_END) {
       if(jpegoutput2_file != NULL) fclose(jpegoutput2_file);
       jpegoutput2_file = NULL;
-      if(cfg_stru[c_status_file] != 0) {
-         if(!timelapse) {
-            status_file = fopen(cfg_stru[c_status_file], "w");
-            fprintf(status_file, "ready");
-            fclose(status_file);
-         }
-      }
       if (timelapse && strlen(cfg_stru[c_lapse_path]) > 10)
          lapse_cnt++;
       else
          image2_cnt++;
-      capturing = 0;
+      i_capturing = 0;
+      updateStatus();
    }
 
    mmal_buffer_header_release(buffer);
@@ -993,14 +1026,8 @@ void capt_img (void) {
       status = mmal_port_parameter_set_boolean(camera->output[2], MMAL_PARAMETER_CAPTURE, 1);
       if(status == MMAL_SUCCESS) {
          printLog("Capturing image\n");
-         if(cfg_stru[c_status_file] != 0) {
-            if(!timelapse) {
-               status_file = fopen(cfg_stru[c_status_file], "w");
-               fprintf(status_file, "image");
-               fclose(status_file);
-            }
-         }
-         capturing = 1;
+         i_capturing = 1;
+         updateStatus();
       } else {
          error("Could not start image capture", 0);
       }
@@ -1013,7 +1040,7 @@ void start_video(void) {
    int i, max;
    char *filename_temp;
 
-   if(!capturing) {
+   if(!v_capturing) {
       status = mmal_component_enable(h264encoder);
       if(status != MMAL_SUCCESS) {error("Could not enable h264encoder", 0); return;}
       pool_h264encoder = mmal_port_pool_create(h264encoder->output[0], h264encoder->output[0]->buffer_num, h264encoder->output[0]->buffer_size);
@@ -1048,20 +1075,15 @@ void start_video(void) {
       mmal_port_parameter_set_boolean(camera->output[1], MMAL_PARAMETER_CAPTURE, 1);
       if(status != MMAL_SUCCESS) {error("Could not start capture", 0); return;}
       printLog("Capturing started\n");
-      if(cfg_stru[c_status_file] != 0) {
-         status_file = fopen(cfg_stru[c_status_file], "w");
-         if(!cfg_val[c_motion_detection]) fprintf(status_file, "video");
-         else fprintf(status_file, "md_video");
-         fclose(status_file);
-      }
-      capturing = 1;
+      v_capturing = 1;
+      updateStatus();
    }
 }
 
 void stop_video(void) {
    char *filename_temp, *cmd_temp;
    char background;
-   if(capturing) {
+   if(v_capturing) {
       mmal_port_parameter_set_boolean(camera->output[1], MMAL_PARAMETER_CAPTURE, 0);
       if(status != MMAL_SUCCESS) error("Could not stop capture", 1);
       status = mmal_port_disable(h264encoder->output[0]);
@@ -1079,10 +1101,8 @@ void stop_video(void) {
          asprintf(&filename_temp, "%s.h264", filename_recording);
          if(cfg_val[c_MP4Box] == 1) {
             printLog("Boxing started\n");
-            status_file = fopen(cfg_stru[c_status_file], "w");
-            if(!cfg_val[c_motion_detection]) fprintf(status_file, "boxing");
-            else fprintf(status_file, "md_boxing");
-            fclose(status_file);
+            v_boxing = 1;
+            updateStatus();
             background = ' ';
          } else {
             background = '&';
@@ -1091,6 +1111,7 @@ void stop_video(void) {
          if(cfg_val[c_MP4Box] == 1) {
             if(system(cmd_temp) == -1) error("Could not start MP4Box", 0);
             printLog("Boxing operation stopped\n");
+            v_boxing = 0;
          } else {
             system(cmd_temp);
             printLog("Boxing in background\n");
@@ -1100,13 +1121,8 @@ void stop_video(void) {
          free(cmd_temp);
       }
       video_cnt++;
-      if(cfg_stru[c_status_file] != 0) {
-         status_file = fopen(cfg_stru[c_status_file], "w");
-         if(!cfg_val[c_motion_detection]) fprintf(status_file, "ready");
-         else fprintf(status_file, "md_ready");
-         fclose(status_file);
-      }
-      capturing = 0;
+      v_capturing = 0;
+      updateStatus();
    }
 }
 
@@ -1142,6 +1158,7 @@ void addValue(int keyI, char *value, int both){
             val = 1;
             idle = 0;
          };
+         updateStatus();
          break;
       case c_MP4Box:
          if(strcmp(value, "background") == 0)
@@ -1244,24 +1261,15 @@ void process_cmd(char *readbuf, int length) {
          break;
       case tl:
          if(par0) {
-            if(cfg_stru[c_status_file] != 0) {
-               status_file = fopen(cfg_stru[c_status_file], "w");
-               fprintf(status_file, "timelapse");
-               fclose(status_file);
-            }
             timelapse = 1;
             lapse_cnt = 1;
+            updateStatus();
             printLog("Timelapse started\n");
          }
          else {
-            if(cfg_stru[c_status_file] != 0) {
-              status_file = fopen(cfg_stru[c_status_file], "w");
-              if(!cfg_val[c_motion_detection]) fprintf(status_file, "ready");
-              else fprintf(status_file, "md_ready");
-              fclose(status_file);
-            }
             image2_cnt++;
             timelapse = 0;
+            updateStatus();
             printLog("Timelapse stopped\n");
          }
          break;
@@ -1375,43 +1383,25 @@ void process_cmd(char *readbuf, int length) {
             stop_all();
             idle = 1;
             printLog("Stream halted\n");
-            if(cfg_stru[c_status_file] != 0) {
-              status_file = fopen(cfg_stru[c_status_file], "w");
-              fprintf(status_file, "halted");
-              fclose(status_file);
-            }
          } else {
             start_all(1);
             idle = 0;
             printLog("Stream continued\n");
-            if(cfg_stru[c_status_file] != 0) {
-              status_file = fopen(cfg_stru[c_status_file], "w");
-              fprintf(status_file, "ready");
-              fclose(status_file);
-            }
          }
+         updateStatus();
          break;
       case md:
          if(par0 == 0) {
             cfg_val[c_motion_detection] = 0;
             if(system("killall motion") == -1) error("Could not stop Motion", 1);
             printLog("Motion detection stopped\n");
-            if(cfg_stru[c_status_file] != 0) {
-               status_file = fopen(cfg_stru[c_status_file], "w");
-               fprintf(status_file, "ready");
-               fclose(status_file);
-            }
          }
          else {
             cfg_val[c_motion_detection] = 1;
             if(system("motion") == -1) error("Could not start Motion", 1);
             printLog("Motion detection started\n");
-            if(cfg_stru[c_status_file] != 0) {
-               status_file = fopen(cfg_stru[c_status_file], "w");
-               fprintf(status_file, "md_ready");
-               fclose(status_file);
-            }
          }
+         updateStatus();
          break;
       case sc:
          set_counts();
@@ -1578,19 +1568,6 @@ int main (int argc, char* argv[]) {
    action.sa_handler = term;
    sigaction(SIGTERM, &action, NULL);
    sigaction(SIGINT, &action, NULL);
-  
-   if(cfg_stru[c_status_file] != 0) {
-      status_file = fopen(cfg_stru[c_status_file], "w");
-      if(!status_file) error("Could not open/create status-file", 1);
-      if(cfg_val[c_autostart]) {
-         if(!cfg_val[c_motion_detection]) {
-            fprintf(status_file, "ready");
-         }
-         else fprintf(status_file, "md_ready");
-      }
-      else fprintf(status_file, "halted");
-      fclose(status_file);
-   }
    
    //Clear out anything in FIFO first
    do {
@@ -1619,7 +1596,7 @@ int main (int argc, char* argv[]) {
       if(timelapse) {
          tl_cnt++;
          if(tl_cnt >= cfg_val[c_tl_interval]) {
-            if(capturing == 0) {
+            if(i_capturing == 0) {
                capt_img();
                tl_cnt = 0;
             }
