@@ -51,3 +51,10 @@ Supports writing to a log file
 April 5th 2015
 Centralised status updates
 Allowed image capture in video mode
+
+April 9th 2015
+Split up RaspiMJPEG over 4 files plus header
+RaspiMJPEG.c main + config routines
+RaspiMCam.c Camera access routines
+RaspiMCmds.c Commands
+RaspiMUtils.c General utilities
