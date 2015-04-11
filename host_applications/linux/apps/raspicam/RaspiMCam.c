@@ -240,22 +240,6 @@ static void h264encoder_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T
 
 }
 
-void cam_set_annotationV2 (char *filename_temp, MMAL_BOOL_T enable) {
-   MMAL_PARAMETER_CAMERA_ANNOTATE_V2_T anno = {{MMAL_PARAMETER_ANNOTATE, sizeof(MMAL_PARAMETER_CAMERA_ANNOTATE_V2_T)}};
-
-   if (filename_temp != 0) strcpy(anno.text, filename_temp);
-   anno.enable = enable;
-   anno.show_shutter = 0;
-   anno.show_analog_gain = 0;
-   anno.show_lens = 0;
-   anno.show_caf = 0;
-   anno.show_motion = 0;
-   anno.black_text_background = cfg_val[c_anno_background];
-
-   status = mmal_port_parameter_set(camera->control, &anno.hdr);
-   if(status != MMAL_SUCCESS) error("Could not set annotation", 0);
-}
-
 void cam_set_annotationV3 (char *filename_temp, MMAL_BOOL_T enable) {
    MMAL_PARAMETER_CAMERA_ANNOTATE_V3_T anno = {{MMAL_PARAMETER_ANNOTATE, sizeof(MMAL_PARAMETER_CAMERA_ANNOTATE_V3_T)}};
    
@@ -292,11 +276,7 @@ void cam_set_annotation() {
    } else {
       enable = MMAL_FALSE;
    }
-   if (cfg_val[c_anno_version] == 3) 
-      cam_set_annotationV3(filename_temp, enable);
-   else
-      cam_set_annotationV2(filename_temp, enable);
-   
+   cam_set_annotationV3(filename_temp, enable);
    if (filename_temp != 0) free(filename_temp);
 }
 

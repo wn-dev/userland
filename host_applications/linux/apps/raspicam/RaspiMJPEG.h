@@ -70,7 +70,7 @@ extern unsigned char timelapse, running, autostart, idle, a_error, v_capturing, 
 extern unsigned char buffering, buffering_toggle;
 
 //hold config file data for both dflt and user config files and u long versions
-#define KEY_COUNT 62
+#define KEY_COUNT 61
 extern char *cfg_strd[KEY_COUNT + 1];
 extern char *cfg_stru[KEY_COUNT + 1];
 extern long int cfg_val[KEY_COUNT + 1];
@@ -78,7 +78,7 @@ extern char *cfg_key[];
 
 typedef enum cfgkey_type
    {
-   c_annotation,c_anno_background,c_anno_version,
+   c_annotation,c_anno_background,
    c_anno3_custom_background_colour,c_anno3_custom_background_Y,c_anno3_custom_background_U,c_anno3_custom_background_V,
    c_anno3_custom_text_colour,c_anno3_custom_text_Y,c_anno3_custom_text_U,c_anno3_custom_text_V,c_anno_text_size,
    c_sharpness,c_contrast,c_brightness,c_saturation,c_iso,
@@ -109,7 +109,6 @@ void createMediaPath(char* filename);
 int copy_file(char *from_filename, char *to_filename);
 
 //Camera
-void cam_set_annotationV2 (char *filename_temp, MMAL_BOOL_T enable);
 void cam_set_annotationV3 (char *filename_temp, MMAL_BOOL_T enable);
 void cam_set_annotation();
 void thumb_create(char *from_filename, char source);
