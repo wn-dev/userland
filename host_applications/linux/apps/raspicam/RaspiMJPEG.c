@@ -57,9 +57,14 @@ MMAL_COMPONENT_T *camera = 0, *jpegencoder = 0, *jpegencoder2 = 0, *h264encoder 
 MMAL_CONNECTION_T *con_cam_res, *con_res_jpeg, *con_cam_h264, *con_cam_jpeg;
 FILE *jpegoutput_file = NULL, *jpegoutput2_file = NULL, *h264output_file = NULL, *status_file = NULL;
 MMAL_POOL_T *pool_jpegencoder, *pool_jpegencoder2, *pool_h264encoder;
+char *cb_buff = NULL;
+char header_bytes[29];
+int cb_len, cb_wptr, cb_wrap, cb_data;
+int iframe_buff[IFRAME_BUFSIZE], iframe_buff_wpos, iframe_buff_rpos, header_wptr;
 unsigned int tl_cnt=0, mjpeg_cnt=0, image_cnt=0, image2_cnt=0, lapse_cnt=0, video_cnt=0;
 char *filename_recording = 0;
 unsigned char timelapse=0, running=1, autostart=1, idle=0, a_error=0, v_capturing=0, i_capturing=0, v_boxing=0;
+unsigned char buffering=0, buffering_toggle=0;
 char *cfg_strd[KEY_COUNT + 1];
 char *cfg_stru[KEY_COUNT + 1];
 long int cfg_val[KEY_COUNT + 1];
@@ -75,7 +80,7 @@ char *cfg_key[] ={
    "sensor_region_x","sensor_region_y","sensor_region_w","sensor_region_h",
    "shutter_speed","raw_layer",
    "width","quality","divider",
-   "video_width","video_height","video_fps","video_bitrate",
+   "video_width","video_height","video_fps","video_bitrate","video_buffer",
    "MP4Box","MP4Box_fps",
    "image_width","image_height","image_quality","tl_interval",
    "preview_path","image_path","lapse_path","video_path","status_file","control_file","media_path","subdir_char",
@@ -103,10 +108,10 @@ int getKey(char *key) {
 }
 
 void addValue(int keyI, char *value, int both){
-   long int val=strtol(value, NULL, 10);;
+   long int val=strtol(value, NULL, 10);
 
    if (cfg_stru[keyI] != 0) free(cfg_stru[keyI]);
-   asprintf(&cfg_stru[keyI],"%s", value);
+      asprintf(&cfg_stru[keyI],"%s", value);
    if (both) {
       if (cfg_strd[keyI] != 0) free(cfg_strd[keyI]);
       asprintf(&cfg_strd[keyI],"%s", value);
@@ -176,7 +181,7 @@ void read_config(char *cfilename, int type) {
             }
          }
       }
-   if(line) free(line);
+      if(line) free(line);
    }   
 }
 
@@ -196,13 +201,11 @@ int main (int argc, char* argv[]) {
       else if(strcmp(argv[i], "-md") == 0) {
          cfg_val[c_motion_detection] = 1;
       }
-      else if(strcmp(argv[i], "-md") == 0) {
-         cfg_val[c_motion_detection] = 1;
-      }
    }
 
    //default base media path
    asprintf(&cfg_stru[c_media_path], "%s", "/var/www/media");
+   
    //
    // read configs and init
    //

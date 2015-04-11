@@ -31,7 +31,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /**
  * \file RaspiMJPEG.h
  **/
-#define VERSION "5.0.0"
+#define VERSION "5.1.0"
  
 #include <stdio.h>
 #include <stdlib.h>
@@ -54,17 +54,23 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/mmal/util/mmal_default_components.h"
 #include "interface/mmal/util/mmal_connection.h"
 
+#define IFRAME_BUFSIZE (60*1000)
 extern MMAL_STATUS_T status;
 extern MMAL_COMPONENT_T *camera, *jpegencoder, *jpegencoder2, *h264encoder, *resizer;
 extern MMAL_CONNECTION_T *con_cam_res, *con_res_jpeg, *con_cam_h264, *con_cam_jpeg;
 extern FILE *jpegoutput_file, *jpegoutput2_file, *h264output_file, *status_file;
 extern MMAL_POOL_T *pool_jpegencoder, *pool_jpegencoder2, *pool_h264encoder;
+extern char *cb_buff;
+extern char header_bytes[29];
+extern int cb_len, cb_wptr, cb_wrap, cb_data;
+extern int iframe_buff[IFRAME_BUFSIZE], iframe_buff_wpos, iframe_buff_rpos, header_wptr;
 extern unsigned int tl_cnt, mjpeg_cnt, image_cnt, image2_cnt, lapse_cnt, video_cnt;
-extern char *filename_recording ;
+extern char *filename_recording;
 extern unsigned char timelapse, running, autostart, idle, a_error, v_capturing, i_capturing, v_boxing;
+extern unsigned char buffering, buffering_toggle;
 
 //hold config file data for both dflt and user config files and u long versions
-#define KEY_COUNT 61
+#define KEY_COUNT 62
 extern char *cfg_strd[KEY_COUNT + 1];
 extern char *cfg_stru[KEY_COUNT + 1];
 extern long int cfg_val[KEY_COUNT + 1];
@@ -82,7 +88,7 @@ typedef enum cfgkey_type
    c_sensor_region_x,c_sensor_region_y,c_sensor_region_w,c_sensor_region_h,
    c_shutter_speed,c_raw_layer,
    c_width,c_quality,c_divider,
-   c_video_width,c_video_height,c_video_fps,c_video_bitrate,
+   c_video_width,c_video_height,c_video_fps,c_video_bitrate,c_video_buffer,
    c_MP4Box,c_MP4Box_fps,
    c_image_width,c_image_height,c_image_quality,c_tl_interval,
    c_preview_path,c_image_path,c_lapse_path,c_video_path,c_status_file,c_control_file,c_media_path,c_subdir_char,
@@ -108,8 +114,8 @@ void cam_set_annotationV3 (char *filename_temp, MMAL_BOOL_T enable);
 void cam_set_annotation();
 void thumb_create(char *from_filename, char source);
 void capt_img (void);
-void start_video(void);
-void stop_video(void);
+void start_video(unsigned char prepare_buf);
+void stop_video(unsigned char stop_buf);
 void cam_set_em ();
 void cam_set_wb ();
 void cam_set_mm ();

@@ -2,6 +2,7 @@
 Copyright (c) 2015, Broadcom Europe Ltd
 Copyright (c) 2015, Silvan Melchior
 Copyright (c) 2015, Robert Tidey
+Copyright (c) 2015, ethanol100
 Copyright (c) 2015, James Hughes
 All rights reserved.
 
@@ -71,7 +72,7 @@ static void jpegencoder_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T
          else bytes_written = 0;
          mmal_buffer_header_mem_unlock(buffer);
       }
-    if(bytes_written != buffer->length) error("Could not write all bytes", 0);
+      if(bytes_written != buffer->length) error("Could not write all bytes", 0);
       }
   
    if(buffer->flags & MMAL_BUFFER_HEADER_FLAG_FRAME_END) {
@@ -146,29 +147,97 @@ static void jpegencoder2_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_
 
 static void h264encoder_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)  {
 
-   int bytes_written = buffer->length;
+  int bytes_written = buffer->length;
 
-   if(buffer->length) {
+  if(buffering_toggle) {
+    
+    int space_in_buff = cb_len - cb_wptr;
+    int copy_to_end = space_in_buff > buffer->length ? buffer->length : space_in_buff;
+    int copy_to_start = buffer->length - copy_to_end;
+    
+    if(buffer->flags & MMAL_BUFFER_HEADER_FLAG_CONFIG) {
+      if(header_wptr + buffer->length > sizeof(header_bytes)) {
+        error("Error in header bytes\n", 0);
+      }
+      else  {
+        mmal_buffer_header_mem_lock(buffer);
+        memcpy(header_bytes + header_wptr, buffer->data, buffer->length);
+        mmal_buffer_header_mem_unlock(buffer);
+        header_wptr += buffer->length;
+      }
+    }
+    else {
+      static int frame_start = -1;
+      int i;
+
+      if(frame_start == -1)
+        frame_start = cb_wptr;
+
+      if(buffer->flags & MMAL_BUFFER_HEADER_FLAG_KEYFRAME) {
+        iframe_buff[iframe_buff_wpos] = frame_start;
+        iframe_buff_wpos = (iframe_buff_wpos + 1) % IFRAME_BUFSIZE;
+      }
+
+      if(buffer->flags & MMAL_BUFFER_HEADER_FLAG_FRAME_END)
+        frame_start = -1;
+
+      // If we overtake the iframe rptr then move the rptr along
+      if((iframe_buff_rpos + 1) % IFRAME_BUFSIZE != iframe_buff_wpos)
+        while(
+              (
+                cb_wptr <= iframe_buff[iframe_buff_rpos] &&
+                (cb_wptr + buffer->length) > iframe_buff[iframe_buff_rpos]
+              ) ||
+              (
+                (cb_wptr > iframe_buff[iframe_buff_rpos]) &&
+                (cb_wptr + buffer->length) > (iframe_buff[iframe_buff_rpos] + cb_len)
+              )
+             )
+          iframe_buff_rpos = (iframe_buff_rpos + 1) % IFRAME_BUFSIZE;
+
       mmal_buffer_header_mem_lock(buffer);
-      if(h264output_file != NULL)
-         bytes_written = fwrite(buffer->data, 1, buffer->length, h264output_file);
-      else
-         bytes_written = 0;
+      // We are pushing data into a circular buffer
+      memcpy(cb_buff + cb_wptr, buffer->data, copy_to_end);
+      memcpy(cb_buff, buffer->data + copy_to_end, copy_to_start);
       mmal_buffer_header_mem_unlock(buffer);
-      if(bytes_written != buffer->length) error("Could not write all bytes", 0);
-   }
 
-   mmal_buffer_header_release(buffer);
+      if((cb_wptr + buffer->length) > cb_len)
+        cb_wrap = 1;
 
-   if (port->is_enabled) {
-      MMAL_STATUS_T status = MMAL_SUCCESS;
-      MMAL_BUFFER_HEADER_T *new_buffer;
+      cb_wptr = (cb_wptr + buffer->length) % cb_len;
 
-      new_buffer = mmal_queue_get(pool_h264encoder->queue);
+      for(i = iframe_buff_rpos; i != iframe_buff_wpos; i = (i + 1) % IFRAME_BUFSIZE) {
+        int p = iframe_buff[i];
+        if(cb_buff[p] != 0 || cb_buff[p+1] != 0 || cb_buff[p+2] != 0 || cb_buff[p+3] != 1) {
+          error("Error in iframe list", 0);
+        }
+      }
+    }
+  }
+  else if(buffer->length) {
+  
+    mmal_buffer_header_mem_lock(buffer);
+    if(h264output_file != NULL)
+      bytes_written = fwrite(buffer->data, 1, buffer->length, h264output_file);
+    else
+      bytes_written = 0;
+    mmal_buffer_header_mem_unlock(buffer);
+    if(bytes_written != buffer->length) error("Could not write all bytes", 0);
+    
+  }
 
-      if (new_buffer) status = mmal_port_send_buffer(port, new_buffer);
-      if (!new_buffer || status != MMAL_SUCCESS) error("Could not send buffers to port", 1);
-   }
+  mmal_buffer_header_release(buffer);
+
+  if (port->is_enabled) {
+    MMAL_STATUS_T status = MMAL_SUCCESS;
+    MMAL_BUFFER_HEADER_T *new_buffer;
+
+    new_buffer = mmal_queue_get(pool_h264encoder->queue);
+
+    if (new_buffer) status = mmal_port_send_buffer(port, new_buffer);
+    if (!new_buffer || status != MMAL_SUCCESS) error("Could not send buffers to port", 1);
+  }
+
 }
 
 void cam_set_annotationV2 (char *filename_temp, MMAL_BOOL_T enable) {
@@ -304,11 +373,20 @@ void capt_img (void) {
    }
 }
 
-void start_video(void) {
-   int i, max;
-   char *filename_temp;
+void start_video(unsigned char prepare_buf) {
+  int i, max;
+  char *filename_temp;
 
-   if(!v_capturing) {
+  if(!v_capturing || prepare_buf) {
+    if(prepare_buf) {
+      cb_wptr = 0;
+      cb_wrap = 0;
+      cb_data = 0;
+      iframe_buff_wpos = 0;
+      iframe_buff_rpos = 0;
+      header_wptr = 0;
+    }
+    if(prepare_buf || !buffering) {
       status = mmal_component_enable(h264encoder);
       if(status != MMAL_SUCCESS) {error("Could not enable h264encoder", 0); return;}
       pool_h264encoder = mmal_port_pool_create(h264encoder->output[0], h264encoder->output[0]->buffer_num, h264encoder->output[0]->buffer_size);
@@ -317,41 +395,62 @@ void start_video(void) {
       if(status != MMAL_SUCCESS) {error("Could not create connection camera -> video converter", 0); return;}
       status = mmal_connection_enable(con_cam_h264);
       if(status != MMAL_SUCCESS) {error("Could not enable connection camera -> video converter", 0); return;}
+    }
+    if(!prepare_buf) {
       currTime = time(NULL);
       localTime = localtime (&currTime);
       if(cfg_val[c_MP4Box] != 0) {
-         makeFilename(&filename_recording, cfg_stru[c_video_path]);
-         asprintf(&filename_temp, "%s.h264", filename_recording);
+        makeFilename(&filename_recording, cfg_stru[c_video_path]);
+        asprintf(&filename_temp, "%s.h264", filename_recording);
       }
       else {
-         makeFilename(&filename_temp, cfg_stru[c_video_path]);
+        makeFilename(&filename_temp, cfg_stru[c_video_path]);
       }
       thumb_create(filename_temp, 'v');
       createMediaPath(filename_temp);
       h264output_file = fopen(filename_temp, "wb");
       free(filename_temp);
       if(!h264output_file) {error("Could not open/create video-file", 0); return;}
+      if(buffering) {
+        int copy_from_end, copy_from_start;
+        copy_from_end = cb_len - iframe_buff[iframe_buff_rpos];
+        copy_from_start = cb_len - copy_from_end;
+        copy_from_start = cb_wptr < copy_from_start ? cb_wptr : copy_from_start;
+        if(!cb_wrap) {
+           copy_from_start = cb_wptr;
+           copy_from_end = 0;
+        }
+        long fileSizeCircularBuffer=copy_from_start+copy_from_end+header_wptr;
+        fseek(h264output_file, fileSizeCircularBuffer, SEEK_SET);
+        buffering_toggle = 0;
+      }
+    }
+    if(prepare_buf || !buffering) {
       status = mmal_port_enable(h264encoder->output[0], h264encoder_buffer_callback);
       if(status != MMAL_SUCCESS) {error("Could not enable video port", 0); return;}
       max = mmal_queue_length(pool_h264encoder->queue);
       for(i=0;i<max;i++) {
-         MMAL_BUFFER_HEADER_T *h264buffer = mmal_queue_get(pool_h264encoder->queue);
-         if(!h264buffer) {error("Could not create video pool header", 0); return;}
-         status = mmal_port_send_buffer(h264encoder->output[0], h264buffer);
-         if(status != MMAL_SUCCESS) {error("Could not send buffers to video port", 0); return;}
+        MMAL_BUFFER_HEADER_T *h264buffer = mmal_queue_get(pool_h264encoder->queue);
+        if(!h264buffer) {error("Could not create video pool header", 0); return;}
+        status = mmal_port_send_buffer(h264encoder->output[0], h264buffer);
+        if(status != MMAL_SUCCESS) {error("Could not send buffers to video port", 0); return;}
       }
       mmal_port_parameter_set_boolean(camera->output[1], MMAL_PARAMETER_CAPTURE, 1);
       if(status != MMAL_SUCCESS) {error("Could not start capture", 0); return;}
+    }
+    if(!prepare_buf) {
       printLog("Capturing started\n");
       v_capturing = 1;
-      updateStatus();
-   }
+    }
+    updateStatus();
+  }
 }
 
-void stop_video(void) {
-   char *filename_temp, *cmd_temp;
-   char background;
-   if(v_capturing) {
+void stop_video(unsigned char stop_buf) {
+  char *filename_temp, *cmd_temp;
+  char background;
+  if(v_capturing || stop_buf) {
+    if(stop_buf || !buffering) {
       mmal_port_parameter_set_boolean(camera->output[1], MMAL_PARAMETER_CAPTURE, 0);
       if(status != MMAL_SUCCESS) error("Could not stop capture", 1);
       status = mmal_port_disable(h264encoder->output[0]);
@@ -362,38 +461,82 @@ void stop_video(void) {
       if(status != MMAL_SUCCESS) error("Could not destroy video buffer pool", 1);
       status = mmal_component_disable(h264encoder);
       if(status != MMAL_SUCCESS) error("Could not disable video converter", 1);
+    }
+    if(!stop_buf) {
+      if(buffering) {
+        buffering_toggle = 1;
+        int copy_from_end, copy_from_start;
+        copy_from_end = cb_len - iframe_buff[iframe_buff_rpos];
+        copy_from_start = cb_len - copy_from_end;
+        copy_from_start = cb_wptr < copy_from_start ? cb_wptr : copy_from_start;
+        if(!cb_wrap) {
+          copy_from_start = cb_wptr;
+          copy_from_end = 0;
+        }
+        fseek(h264output_file, 0, SEEK_SET);
+        fwrite(header_bytes, 1, header_wptr, h264output_file);
+        fwrite(cb_buff + iframe_buff[iframe_buff_rpos], 1, copy_from_end, h264output_file);
+        fwrite(cb_buff, 1, copy_from_start, h264output_file);
+      }
       fclose(h264output_file);
       h264output_file = NULL;
       printLog("Capturing stopped\n");
+      v_capturing = 0;
       if(cfg_val[c_MP4Box]) {
-         asprintf(&filename_temp, "%s.h264", filename_recording);
-         if(cfg_val[c_MP4Box] == 1) {
-            printLog("Boxing started\n");
-            v_boxing = 1;
-            updateStatus();
-            background = ' ';
-         } else {
-            background = '&';
-         }
-         asprintf(&cmd_temp, "(MP4Box -fps %i -add %s.h264 %s > /dev/null;rm \"%s\";) %c", cfg_val[c_MP4Box_fps], filename_recording, filename_recording, filename_temp, background);
-         if(cfg_val[c_MP4Box] == 1) {
-            if(system(cmd_temp) == -1) error("Could not start MP4Box", 0);
-            printLog("Boxing operation stopped\n");
-            v_boxing = 0;
-         } else {
-            system(cmd_temp);
-            printLog("Boxing in background\n");
-         }
-         free(filename_temp);
-         free(filename_recording);
-         free(cmd_temp);
+        asprintf(&filename_temp, "%s.h264", filename_recording);
+        if(cfg_val[c_MP4Box] == 1) {
+          printLog("Boxing started\n");
+          v_boxing = 1;
+          updateStatus();
+          background = ' ';
+        }
+        else {
+          background = '&';
+        }
+        asprintf(&cmd_temp, "(MP4Box -fps %i -add %s.h264 %s > /dev/null;rm \"%s\";) %c", cfg_val[c_MP4Box_fps], filename_recording, filename_recording, filename_temp, background);
+        if(cfg_val[c_MP4Box] == 1) {
+          if(system(cmd_temp) == -1) error("Could not start MP4Box", 0);
+          printLog("Boxing operation stopped\n");
+          v_boxing = 0;
+        }
+        else {
+          system(cmd_temp);
+          printLog("Boxing in background\n");
+        }
+        free(filename_temp);
+        free(filename_recording);
+        free(cmd_temp);
       }
       video_cnt++;
-      v_capturing = 0;
-      updateStatus();
-   }
+    }
+    updateStatus();
+  }
 }
 
+void cam_set_buffer() {
+  if(buffering) {
+    buffering = 0;
+    buffering_toggle = 0;
+    stop_video(1);
+    if(cb_buff != NULL) {
+      free(cb_buff);
+    }
+  }
+  if(cfg_val[c_video_buffer] != 0) {
+    int count = ((long long)cfg_val[c_video_bitrate]/8 * (long long)cfg_val[c_video_buffer]) / 1000;
+    
+    cb_buff = (char *) malloc(count);
+    if(cb_buff == NULL) {
+      error("Unable to allocate circular buffer", 0);
+    }
+    else {
+      cb_len = count;
+      buffering = 1;
+      buffering_toggle = 1;
+      start_video(1);
+    }
+  }
+}
 
 void cam_set_em () {
    MMAL_PARAM_EXPOSUREMODE_T mode;
@@ -547,6 +690,9 @@ void cam_set(int key) {
          h264encoder->output[0]->format->bitrate = cfg_val[c_video_bitrate];
          status = mmal_port_format_commit(h264encoder->output[0]);
          if(status != MMAL_SUCCESS) printLog("Could not set bitrate\n");
+         break;
+      case c_video_buffer:
+         cam_set_buffer();
          break;
       case c_exposure_mode:
          cam_set_em();
@@ -839,6 +985,7 @@ void start_all (int load_conf) {
    cam_set(c_shutter_speed);
    cam_set(c_image_quality);
    cam_set(c_video_bitrate);
+   cam_set(c_video_buffer);
    cam_set(c_rotation);
    cam_set(c_exposure_mode);
    cam_set(c_white_balance);

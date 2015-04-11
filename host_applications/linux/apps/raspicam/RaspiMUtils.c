@@ -46,7 +46,7 @@ void printLog(char *msg, ...) {
    char *timestamp;
    va_list args;
    va_start(args, msg);
-   int nofile;
+   int nofile = 0;
    FILE *fp;
 
    if (cfg_stru[c_log_file] != 0) {
