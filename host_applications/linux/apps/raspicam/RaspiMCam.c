@@ -498,7 +498,7 @@ void stop_video(unsigned char stop_buf) {
   }
 }
 
-void cam_set_buffer () {
+void cam_stop_buffering () {
   if(buffering) {
     buffering = 0;
     buffering_toggle = 0;
@@ -507,6 +507,10 @@ void cam_set_buffer () {
       free(cb_buff);
     }
   }
+}
+
+void cam_set_buffer () {
+  cam_stop_buffering ();
   if(cfg_val[c_video_buffer] != 0) {
     int count = ((long long)cfg_val[c_video_bitrate]/8 * (long long)cfg_val[c_video_buffer]) / 1000;
     
@@ -984,6 +988,7 @@ void start_all (int load_conf) {
 
 
 void stop_all (void) {
+   cam_stop_buffering ();
    mmal_port_disable(jpegencoder->output[0]);
    mmal_connection_destroy(con_cam_res);
    mmal_connection_destroy(con_res_jpeg);
