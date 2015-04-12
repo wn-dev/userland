@@ -72,7 +72,7 @@ static void jpegencoder_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T
          else bytes_written = 0;
          mmal_buffer_header_mem_unlock(buffer);
       }
-      if(bytes_written != buffer->length) error("Could not write all bytes", 0);
+      if(bytes_written != buffer->length) error("Could not write all bytes jpeg", 0);
       }
   
    if(buffer->flags & MMAL_BUFFER_HEADER_FLAG_FRAME_END) {
@@ -118,7 +118,7 @@ static void jpegencoder2_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_
          bytes_written = 0;
       mmal_buffer_header_mem_unlock(buffer);
    }
-   if(bytes_written != buffer->length) error("Could not write all bytes", 0);
+   if(bytes_written != buffer->length) error("Could not write all bytes jpeg2", 0);
 
    if(buffer->flags & MMAL_BUFFER_HEADER_FLAG_FRAME_END) {
       if(jpegoutput2_file != NULL) fclose(jpegoutput2_file);
@@ -219,10 +219,10 @@ static void h264encoder_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T
     mmal_buffer_header_mem_lock(buffer);
     if(h264output_file != NULL)
       bytes_written = fwrite(buffer->data, 1, buffer->length, h264output_file);
+      if(bytes_written != buffer->length) error("Could not write all bytes h264", 0);
     else
       bytes_written = 0;
     mmal_buffer_header_mem_unlock(buffer);
-    if(bytes_written != buffer->length) error("Could not write all bytes", 0);
     
   }
 
@@ -482,6 +482,9 @@ void stop_video(unsigned char stop_buf) {
       h264output_file = NULL;
       printLog("Capturing stopped\n");
       v_capturing = 0;
+      if(buffering) {
+        cam_set_buffer();
+      }
       if(cfg_val[c_MP4Box]) {
         asprintf(&filename_temp, "%s.h264", filename_recording);
         if(cfg_val[c_MP4Box] == 1) {
@@ -513,7 +516,7 @@ void stop_video(unsigned char stop_buf) {
   }
 }
 
-void cam_set_buffer() {
+void cam_set_buffer () {
   if(buffering) {
     buffering = 0;
     buffering_toggle = 0;

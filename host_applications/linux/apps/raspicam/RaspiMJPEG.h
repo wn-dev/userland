@@ -31,7 +31,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /**
  * \file RaspiMJPEG.h
  **/
-#define VERSION "5.1.0"
+#define VERSION "5.1.1"
  
 #include <stdio.h>
 #include <stdlib.h>
@@ -116,6 +116,7 @@ void thumb_create(char *from_filename, char source);
 void capt_img (void);
 void start_video(unsigned char prepare_buf);
 void stop_video(unsigned char stop_buf);
+void cam_set_buffer ();
 void cam_set_em ();
 void cam_set_wb ();
 void cam_set_mm ();
