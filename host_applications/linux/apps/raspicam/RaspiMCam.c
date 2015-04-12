@@ -148,6 +148,7 @@ static void jpegencoder2_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_
 static void h264encoder_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)  {
 
   int bytes_written = buffer->length;
+  int iframe_error = 0;
 
   if(buffering_toggle) {
     
@@ -209,9 +210,10 @@ static void h264encoder_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T
       for(i = iframe_buff_rpos; i != iframe_buff_wpos; i = (i + 1) % IFRAME_BUFSIZE) {
         int p = iframe_buff[i];
         if(cb_buff[p] != 0 || cb_buff[p+1] != 0 || cb_buff[p+2] != 0 || cb_buff[p+3] != 1) {
-          error("Error in iframe list", 0);
+          iframe_error = 1;
         }
       }
+      if (iframe_error) error("Error in iframe list", 0);
     }
   }
   else if(buffer->length) {
