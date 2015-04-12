@@ -70,7 +70,7 @@ char *cfg_stru[KEY_COUNT + 1];
 long int cfg_val[KEY_COUNT + 1];
 
 char *cfg_key[] ={
-   "annotation","anno_background","anno_version",
+   "annotation","anno_background",
    "anno3_custom_background_colour","anno3_custom_background_Y","anno3_custom_background_U","anno3_custom_background_V",
    "anno3_custom_text_colour","anno3_custom_text_Y","anno3_custom_text_U","anno3_custom_text_V","anno_text_size",
    "sharpness","contrast","brightness","saturation","iso",
