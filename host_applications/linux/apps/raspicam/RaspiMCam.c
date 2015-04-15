@@ -148,7 +148,6 @@ static void jpegencoder2_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_
 static void h264encoder_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)  {
 
   int bytes_written = buffer->length;
-  int iframe_error = 0;
 
   if(buffering_toggle) {
     
@@ -169,6 +168,8 @@ static void h264encoder_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T
     }
     else {
       static int frame_start = -1;
+      static int no_iframe_bytes = 0;
+      static int iframe_requested = 0;
       int i;
 
       if(frame_start == -1)
@@ -177,12 +178,22 @@ static void h264encoder_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T
       if(buffer->flags & MMAL_BUFFER_HEADER_FLAG_KEYFRAME) {
         iframe_buff[iframe_buff_wpos] = frame_start;
         iframe_buff_wpos = (iframe_buff_wpos + 1) % IFRAME_BUFSIZE;
+        no_iframe_bytes = 0;
+        iframe_requested = 0;
+      }
+      else {
+        no_iframe_bytes += buffer->length;
+        if(no_iframe_bytes > cb_len/4) {
+          if(!iframe_requested) {
+            mmal_port_parameter_set_boolean(camera->output[1], MMAL_PARAMETER_VIDEO_REQUEST_I_FRAME, 1);
+            iframe_requested = 1;
+          }
+        }
       }
 
       if(buffer->flags & MMAL_BUFFER_HEADER_FLAG_FRAME_END)
         frame_start = -1;
 
-      // If we overtake the iframe rptr then move the rptr along
       if((iframe_buff_rpos + 1) % IFRAME_BUFSIZE != iframe_buff_wpos)
         while(
               (
@@ -197,7 +208,6 @@ static void h264encoder_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T
           iframe_buff_rpos = (iframe_buff_rpos + 1) % IFRAME_BUFSIZE;
 
       mmal_buffer_header_mem_lock(buffer);
-      // We are pushing data into a circular buffer
       memcpy(cb_buff + cb_wptr, buffer->data, copy_to_end);
       memcpy(cb_buff, buffer->data + copy_to_end, copy_to_start);
       mmal_buffer_header_mem_unlock(buffer);
@@ -210,10 +220,9 @@ static void h264encoder_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T
       for(i = iframe_buff_rpos; i != iframe_buff_wpos; i = (i + 1) % IFRAME_BUFSIZE) {
         int p = iframe_buff[i];
         if(cb_buff[p] != 0 || cb_buff[p+1] != 0 || cb_buff[p+2] != 0 || cb_buff[p+3] != 1) {
-          iframe_error = 1;
+          error("Error in iframe list", 0);
         }
       }
-      if (iframe_error) error("Error in iframe list", 0);
     }
   }
   else if(buffer->length) {
@@ -424,6 +433,7 @@ void start_video(unsigned char prepare_buf) {
       printLog("Capturing started\n");
       v_capturing = 1;
     }
+    cam_set_ip();
     updateStatus();
   }
 }
@@ -494,6 +504,7 @@ void stop_video(unsigned char stop_buf) {
       }
       video_cnt++;
     }
+    cam_set_ip();
     updateStatus();
   }
 }
@@ -525,6 +536,21 @@ void cam_set_buffer () {
       start_video(1);
     }
   }
+}
+
+void cam_set_ip () {
+
+  int ip = STD_INTRAPERIOD;
+
+  if(!v_capturing && buffering) {
+    ip = ((long long)cfg_val[c_video_buffer]*(long long)cfg_val[c_video_fps]) / 4000;
+    if(ip > STD_INTRAPERIOD) ip = STD_INTRAPERIOD;
+  }
+
+  MMAL_PARAMETER_UINT32_T param = {{ MMAL_PARAMETER_INTRAPERIOD, sizeof(param)}, ip};
+  status = mmal_port_parameter_set(h264encoder->output[0], &param.hdr);
+  if(status != MMAL_SUCCESS) error("Could not set intraperiod", 0);
+
 }
 
 void cam_set_em () {

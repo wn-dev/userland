@@ -31,7 +31,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /**
  * \file RaspiMJPEG.h
  **/
-#define VERSION "5.1.2"
+#define VERSION "5.1.3"
  
 #include <stdio.h>
 #include <stdlib.h>
@@ -55,6 +55,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/mmal/util/mmal_connection.h"
 
 #define IFRAME_BUFSIZE (60*1000)
+#define STD_INTRAPERIOD 60
 extern MMAL_STATUS_T status;
 extern MMAL_COMPONENT_T *camera, *jpegencoder, *jpegencoder2, *h264encoder, *resizer;
 extern MMAL_CONNECTION_T *con_cam_res, *con_res_jpeg, *con_cam_h264, *con_cam_jpeg;
@@ -117,6 +118,7 @@ void start_video(unsigned char prepare_buf);
 void stop_video(unsigned char stop_buf);
 void cam_stop_buffering ();
 void cam_set_buffer ();
+void cam_set_ip ();
 void cam_set_em ();
 void cam_set_wb ();
 void cam_set_mm ();
