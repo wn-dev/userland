@@ -325,5 +325,6 @@ int main (int argc, char* argv[]) {
    // tidy up
    //
    if(!idle) stop_all();
+   system("killall motion");
    return 0;
 }
