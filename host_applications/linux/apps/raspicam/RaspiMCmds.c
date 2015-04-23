@@ -44,8 +44,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "RaspiMJPEG.h"
 
 void process_cmd(char *readbuf, int length) {
-   typedef enum pipe_cmd_type{ca,im,tl,px,bo,tv,an,as,at,ac,ab,sh,co,br,sa,is,vs,rl,ec,em,wb,mm,ie,ce,ro,fl,ri,ss,qu,qp,bi,ru,md,sc,rs,bu} pipe_cmd_type;
-   char pipe_cmds[] = "ca,im,tl,px,bo,tv,an,as,at,ac,ab,sh,co,br,sa,is,vs,rl,ec,em,wb,mm,ie,ce,ro,fl,ri,ss,qu,qp,bi,ru,md,sc,rs,bu";
+   typedef enum pipe_cmd_type{ca,im,tl,px,bo,tv,an,as,at,ac,ab,sh,co,br,sa,is,vs,rl,ec,em,wb,mm,ie,ce,ro,fl,ri,ss,qu,pv,bi,ru,md,sc,rs,bu,wd} pipe_cmd_type;
+   char pipe_cmds[] = "ca,im,tl,px,bo,tv,an,as,at,ac,ab,sh,co,br,sa,is,vs,rl,ec,em,wb,mm,ie,ce,ro,fl,ri,ss,qu,pv,bi,ru,md,sc,rs,bu,wd";
    pipe_cmd_type pipe_cmd;
    int i;
    char pars[128][10];
@@ -194,21 +194,26 @@ void process_cmd(char *readbuf, int length) {
          key = c_sensor_region_x;
          break;
       case ss:
-         addUserValue(c_shutter_speed, pars[0]);
          key = c_shutter_speed;
          break;
       case qu:
          key = c_image_quality;
          break;
-      case qp:
+      case pv:
          stop_all();
          addUserValue(c_quality, pars[0]);
+         addUserValue(c_width, pars[1]);
+         addUserValue(c_divider, pars[2]);
          start_all(0);
          break;
       case bi:
          stop_all();
          addUserValue(c_video_bitrate, pars[0]);
          start_all(0);
+         break;
+      case wd:
+         addUserValue(c_watchdog_interval, pars[0]);
+         addUserValue(c_watchdog_errors, pars[1]);
          break;
       case ru:
          if (par0 == 0) {

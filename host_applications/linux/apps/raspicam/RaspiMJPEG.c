@@ -84,7 +84,7 @@ char *cfg_key[] ={
    "MP4Box","MP4Box_fps",
    "image_width","image_height","image_quality","tl_interval",
    "preview_path","image_path","lapse_path","video_path","status_file","control_file","media_path","subdir_char",
-   "thumb_gen","autostart","motion_detection","user_config","log_file"
+   "thumb_gen","autostart","motion_detection","user_config","log_file","watchdog_interval","watchdog_errors"
 };
 
 
@@ -185,8 +185,31 @@ void read_config(char *cfilename, int type) {
    }   
 }
 
+void monitor() {
+   while(1) {
+      int pid = fork();
+      switch(pid) {
+         case -1: //error
+            error("fork failed", 1);
+         case 0: //child
+            return; //continue to execute the code from main
+         default: //parent
+            printLog("start monitoring for pid: %d\n", pid);
+            int child_status;
+            //wait for child process to terminate
+            wait(&child_status);
+            //child pid has terminated
+            sleep(1);
+      }
+   }
+}
+
 int main (int argc, char* argv[]) {
+   monitor();
+   
    int i, fd, length;
+   int watchdog = 0, watchdog_errors = 0;
+   time_t last_pv_time = 0, pv_time;
    char readbuf[60];
 
    bcm_host_init();
@@ -270,6 +293,29 @@ int main (int argc, char* argv[]) {
                tl_cnt = 0;
             }
          }
+      }
+      // check to see if image preview changing
+      if (!idle && cfg_val[c_watchdog_interval] > 0) {
+         if(watchdog++ > cfg_val[c_watchdog_interval]) {
+            watchdog = 0;
+            pv_time = get_mtime(cfg_stru[c_preview_path]);
+            if (pv_time == 0) {
+               watchdog_errors++;
+            } else {
+               if (pv_time > last_pv_time) {
+                  watchdog_errors = 0;
+               } else {
+                  watchdog_errors++;
+               }
+               last_pv_time = pv_time;
+            }
+            if (watchdog_errors >= cfg_val[c_watchdog_errors]) {
+               printLog("Watchdog detected problem. Stopping");
+               running = 0;
+            }
+         }
+      } else {
+         watchdog_errors = 0;
       }
       usleep(100000);
    }

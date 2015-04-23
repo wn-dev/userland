@@ -43,6 +43,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <time.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -71,7 +72,7 @@ extern unsigned char timelapse, running, autostart, idle, a_error, v_capturing, 
 extern unsigned char buffering, buffering_toggle;
 
 //hold config file data for both dflt and user config files and u long versions
-#define KEY_COUNT 61
+#define KEY_COUNT 63
 extern char *cfg_strd[KEY_COUNT + 1];
 extern char *cfg_stru[KEY_COUNT + 1];
 extern long int cfg_val[KEY_COUNT + 1];
@@ -93,7 +94,7 @@ typedef enum cfgkey_type
    c_MP4Box,c_MP4Box_fps,
    c_image_width,c_image_height,c_image_quality,c_tl_interval,
    c_preview_path,c_image_path,c_lapse_path,c_video_path,c_status_file,c_control_file,c_media_path,c_subdir_char,
-   c_thumb_gen,c_autostart,c_motion_detection,c_user_config,c_log_file
+   c_thumb_gen,c_autostart,c_motion_detection,c_user_config,c_log_file,c_watchdog_interval,c_watchdog_errors
    } cfgkey_type; 
 
 time_t currTime;
@@ -108,6 +109,7 @@ char* trim(char*s);
 void makeFilename(char** filename, char *template);
 void createMediaPath(char* filename);
 int copy_file(char *from_filename, char *to_filename);
+time_t get_mtime(const char *path);
 
 //Camera
 void cam_set_annotationV3 (char *filename_temp, MMAL_BOOL_T enable);
@@ -140,4 +142,5 @@ void addValue(int keyI, char *value, int both);
 void addUserValue(int key, char *value);
 void saveUserConfig(char *cfilename);
 void read_config(char *cfilename, int type);
+void monitor();
 
