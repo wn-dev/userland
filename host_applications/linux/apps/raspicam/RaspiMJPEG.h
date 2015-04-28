@@ -71,6 +71,12 @@ extern char *filename_recording;
 extern unsigned char timelapse, running, autostart, idle, a_error, v_capturing, i_capturing, v_boxing;
 extern unsigned char buffering, buffering_toggle;
 
+//Box file queue
+#define MAX_BOX_FILES 32
+extern char *box_files[MAX_BOX_FILES];
+extern int box_head;
+extern int box_tail;
+
 //hold config file data for both dflt and user config files and u long versions
 #define KEY_COUNT 63
 extern char *cfg_strd[KEY_COUNT + 1];

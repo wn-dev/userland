@@ -478,29 +478,9 @@ void stop_video(unsigned char stop_buf) {
         cam_set_buffer();
       }
       if(cfg_val[c_MP4Box]) {
-        asprintf(&filename_temp, "%s.h264", filename_recording);
-        if(cfg_val[c_MP4Box] == 1) {
-          printLog("Boxing started\n");
-          v_boxing = 1;
-          updateStatus();
-          background = ' ';
-        }
-        else {
-          background = '&';
-        }
-        asprintf(&cmd_temp, "(MP4Box -fps %i -add %s.h264 %s > /dev/null;rm \"%s\";) %c", cfg_val[c_MP4Box_fps], filename_recording, filename_recording, filename_temp, background);
-        if(cfg_val[c_MP4Box] == 1) {
-          if(system(cmd_temp) == -1) error("Could not start MP4Box", 0);
-          printLog("Boxing operation stopped\n");
-          v_boxing = 0;
-        }
-        else {
-          system(cmd_temp);
-          printLog("Boxing in background\n");
-        }
-        free(filename_temp);
+        //Queue the h264 for boxing
+        add_box_file(filename_recording);
         free(filename_recording);
-        free(cmd_temp);
       }
       video_cnt++;
     }

@@ -93,12 +93,6 @@ void updateStatus() {
       else if (timelapse) {
          strcpy(status, "timelapse");
       }
-      else if (v_boxing) {
-         if(!cfg_val[c_motion_detection]) 
-            strcpy(status, "boxing");
-         else
-            strcpy(status, "md_boxing");
-      }
       else {
          if(!cfg_val[c_motion_detection]) 
             strcpy(status, "ready");
@@ -296,3 +290,48 @@ time_t get_mtime(const char *path) {
    }
    return statbuf.st_mtime;
 }
+
+int get_box_count() {
+   if (box_head >= box_tail)
+      return box_head - box_tail;
+   else
+      return MAX_BOX_FILES + box_head - box_tail;
+}
+
+void add_box_file(char *boxfile) {
+   if ((MAX_BOX_FILES - get_box_count()) > 2 ) {
+      asprintf(&box_files[box_head], "%s", boxfile);
+      printLog("Add %s to Box Queue at pos %d\n", box_files[box_head], box_head);
+      box_head++;
+      if (box_head >= MAX_BOX_FILES) box_head = 0;
+   } else {
+      printLog("Box queue full. Skipped %s", boxfile);
+   }
+}
+
+void check_box_files() {
+   char *cmd_temp = 0, *filename_temp = 0;
+   if (v_boxing > 0) {
+      asprintf(&filename_temp, "%s.h264", box_files[box_tail]);
+      // check if current MP4Box finished by seeing if h264 now deleted
+      if (access(filename_temp, F_OK ) == -1) {
+         printLog("Finished boxing %s from Box Queue at pos %d\n", box_files[box_tail], box_tail);
+         free(box_files[box_tail]);
+         box_tail++;
+         if (box_tail >= MAX_BOX_FILES) box_tail = 0;
+         v_boxing = 0;
+      }
+      free(filename_temp);
+   }
+   if(v_boxing == 0 && get_box_count() > 0) {
+      //start new MP4Box operation
+      asprintf(&filename_temp, "%s.h264", box_files[box_tail]);
+      asprintf(&cmd_temp, "(MP4Box -fps %i -add %s %s > /dev/null;rm \"%s\";) &", cfg_val[c_MP4Box_fps], filename_temp, box_files[box_tail], filename_temp);
+      printLog("Start boxing %s from Box Queue at pos %d\n", box_files[box_tail], box_tail);
+      system(cmd_temp);
+      v_boxing = 1;
+      free(cmd_temp);
+      free(filename_temp);
+   }
+}   
+

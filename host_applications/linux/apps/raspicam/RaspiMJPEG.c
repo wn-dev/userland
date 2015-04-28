@@ -65,6 +65,11 @@ unsigned int tl_cnt=0, mjpeg_cnt=0, image_cnt=0, image2_cnt=0, lapse_cnt=0, vide
 char *filename_recording = 0;
 unsigned char timelapse=0, running=1, autostart=1, idle=0, a_error=0, v_capturing=0, i_capturing=0, v_boxing=0;
 unsigned char buffering=0, buffering_toggle=0;
+
+char *box_files[MAX_BOX_FILES];
+int box_head=0;
+int box_tail=0;
+
 char *cfg_strd[KEY_COUNT + 1];
 char *cfg_stru[KEY_COUNT + 1];
 long int cfg_val[KEY_COUNT + 1];
@@ -209,6 +214,7 @@ int main (int argc, char* argv[]) {
    
    int i, fd, length;
    int watchdog = 0, watchdog_errors = 0;
+   int box_check = 0;
    time_t last_pv_time = 0, pv_time;
    char readbuf[60];
 
@@ -316,6 +322,11 @@ int main (int argc, char* argv[]) {
          }
       } else {
          watchdog_errors = 0;
+      }
+      if (box_check++ >= 10) {
+         //run check on background boxing every 10 ticks
+         box_check = 0;
+         check_box_files();
       }
       usleep(100000);
    }
