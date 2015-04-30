@@ -78,7 +78,7 @@ extern int box_head;
 extern int box_tail;
 
 //hold config file data for both dflt and user config files and u long versions
-#define KEY_COUNT 63
+#define KEY_COUNT 64
 extern char *cfg_strd[KEY_COUNT + 1];
 extern char *cfg_stru[KEY_COUNT + 1];
 extern long int cfg_val[KEY_COUNT + 1];
@@ -99,7 +99,7 @@ typedef enum cfgkey_type
    c_video_width,c_video_height,c_video_fps,c_video_bitrate,c_video_buffer,
    c_MP4Box,c_MP4Box_fps,
    c_image_width,c_image_height,c_image_quality,c_tl_interval,
-   c_preview_path,c_image_path,c_lapse_path,c_video_path,c_status_file,c_control_file,c_media_path,c_subdir_char,
+   c_preview_path,c_image_path,c_lapse_path,c_video_path,c_status_file,c_control_file,c_media_path,c_macros_path,c_subdir_char,
    c_thumb_gen,c_autostart,c_motion_detection,c_user_config,c_log_file,c_watchdog_interval,c_watchdog_errors
    } cfgkey_type; 
 
@@ -140,6 +140,7 @@ void stop_all (void);
 
 //Cmds
 void process_cmd(char *readbuf, int length);
+void exec_macro(char *macro);
 
 //Main
 void set_counts();

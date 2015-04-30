@@ -88,7 +88,7 @@ char *cfg_key[] ={
    "video_width","video_height","video_fps","video_bitrate","video_buffer",
    "MP4Box","MP4Box_fps",
    "image_width","image_height","image_quality","tl_interval",
-   "preview_path","image_path","lapse_path","video_path","status_file","control_file","media_path","subdir_char",
+   "preview_path","image_path","lapse_path","video_path","status_file","control_file","media_path","macros_path","subdir_char",
    "thumb_gen","autostart","motion_detection","user_config","log_file","watchdog_interval","watchdog_errors"
 };
 
