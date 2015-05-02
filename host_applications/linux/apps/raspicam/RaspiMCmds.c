@@ -188,9 +188,9 @@ void process_cmd(char *readbuf, int length) {
          cam_set(c_hflip);
          break;
       case ri:
-         addUserValue(c_sensor_region_y, pars[0]);
-         addUserValue(c_sensor_region_w, pars[0]);
-         addUserValue(c_sensor_region_h, pars[0]);
+         addUserValue(c_sensor_region_y, pars[1]);
+         addUserValue(c_sensor_region_w, pars[2]);
+         addUserValue(c_sensor_region_h, pars[3]);
          key = c_sensor_region_x;
          break;
       case ss:
