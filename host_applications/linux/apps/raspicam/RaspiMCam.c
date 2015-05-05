@@ -310,10 +310,6 @@ void thumb_create(char *from_filename, char source) {
       asprintf(&filename, "%s", from_filename);
       if (strncmp(filename, cfg_stru[c_media_path], strlen(cfg_stru[c_media_path])) == 0) {
          f = filename + strlen(cfg_stru[c_media_path]) + 1;
-         //remove .h264 if present
-         if (strcmp((f + strlen(f) - 5), ".h264") == 0) {
-            *(f + strlen(f) - 5) = 0; 
-         }
          s = f;
          do {
             t = strchr(s, '/');
@@ -390,14 +386,20 @@ void start_video(unsigned char prepare_buf) {
     if(!prepare_buf) {
       currTime = time(NULL);
       localTime = localtime (&currTime);
+      makeFilename(&filename_recording, cfg_stru[c_video_path]);
       if(cfg_val[c_MP4Box] != 0) {
-        makeFilename(&filename_recording, cfg_stru[c_video_path]);
         asprintf(&filename_temp, "%s.h264", filename_recording);
+        thumb_create(filename_recording, 'v');
+      } else {
+        //trim off extension
+        char *ext = strrchr(filename_recording, '.');
+        if (ext != NULL) *ext = 0;
+        asprintf(&filename_temp, "%s.h264", filename_recording);
+        thumb_create(filename_temp, 'v');
+        //restore full filename
+        if (ext != NULL) *ext = '.';
+        free(filename_recording);
       }
-      else {
-        makeFilename(&filename_temp, cfg_stru[c_video_path]);
-      }
-      thumb_create(filename_temp, 'v');
       createMediaPath(filename_temp);
       h264output_file = fopen(filename_temp, "wb");
       free(filename_temp);
@@ -439,7 +441,7 @@ void start_video(unsigned char prepare_buf) {
 }
 
 void stop_video(unsigned char stop_buf) {
-  char *filename_temp, *cmd_temp;
+  char *filename_temp;
   char background;
   if(v_capturing || stop_buf) {
     if(stop_buf || !buffering) {
