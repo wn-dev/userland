@@ -48,6 +48,7 @@ void printLog(char *msg, ...) {
    va_start(args, msg);
    int nofile = 0;
    FILE *fp;
+   vfprintf(stdout, msg, args);
 
    if (cfg_stru[c_log_file] != 0) {
       nofile = (access(cfg_stru[c_log_file], F_OK ) == -1 );
@@ -183,7 +184,7 @@ char* trim(char*s) {
 void makeFilename(char** filename, char *template) {
    //Create filename from template
    const int max_subs = 16;
-   char spec[11] = "%YyMDhmsvit";
+   char spec[13] = "%YyMDhmsvitfc";
    char *template1;
    char p[max_subs][10];
    char *s, *e, *f;
@@ -220,6 +221,8 @@ void makeFilename(char** filename, char *template) {
             case 8: sprintf(p[pi], "%04d", video_cnt);break;
             case 9: sprintf(p[pi], "%04d", image2_cnt);break;
             case 10: sprintf(p[pi], "%04d", lapse_cnt);break;
+            case 11: sprintf(p[pi], "%04d", motion_frame_count);break;
+            case 12: sprintf(p[pi], "%04d", motion_changes);break;
          }
          if (pi < (max_subs-1)) pi++;
          *s = 's';
@@ -334,4 +337,17 @@ void check_box_files() {
       free(filename_temp);
    }
 }   
+
+void send_schedulecmd(char *cmd) {
+   FILE *m_pipe;
+   
+   printLog("send smd %s\n", cmd);
+   if (cfg_stru[c_motion_pipe] != NULL) {
+      m_pipe = fopen(cfg_stru[c_motion_pipe], "w");
+      if (m_pipe != NULL) {
+         fwrite(cmd, 1, 1, m_pipe);
+         fclose(m_pipe);
+      }
+   }
+}
 

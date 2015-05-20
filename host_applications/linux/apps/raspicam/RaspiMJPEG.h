@@ -31,7 +31,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /**
  * \file RaspiMJPEG.h
  **/
-#define VERSION "5.1.3"
+#define VERSION "5.2.1"
  
 #include <stdio.h>
 #include <stdlib.h>
@@ -44,7 +44,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <dirent.h>
 #include <unistd.h>
 #include <sys/stat.h>
-
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
 #include "interface/mmal/mmal.h"
@@ -58,13 +57,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define IFRAME_BUFSIZE (60*1000)
 #define STD_INTRAPERIOD 60
 extern MMAL_STATUS_T status;
-extern MMAL_COMPONENT_T *camera, *jpegencoder, *jpegencoder2, *h264encoder, *resizer;
-extern MMAL_CONNECTION_T *con_cam_res, *con_res_jpeg, *con_cam_h264, *con_cam_jpeg;
-extern FILE *jpegoutput_file, *jpegoutput2_file, *h264output_file, *status_file;
-extern MMAL_POOL_T *pool_jpegencoder, *pool_jpegencoder2, *pool_h264encoder;
+extern MMAL_COMPONENT_T *camera, *jpegencoder, *jpegencoder2, *h264encoder, *resizer, *null_sink, *splitter;
+extern MMAL_CONNECTION_T *con_cam_pre, *con_spli_res, *con_spli_h264, *con_res_jpeg, *con_cam_h264, *con_cam_jpeg;
+extern FILE *jpegoutput_file, *jpegoutput2_file, *h264output_file, *status_file, *motion_file;
+extern MMAL_POOL_T *pool_jpegencoder, *pool_jpegencoder_in, *pool_jpegencoder2, *pool_h264encoder;
 extern char *cb_buff;
 extern char header_bytes[29];
-extern int cb_len, cb_wptr, cb_wrap, cb_data;
+extern int cb_len, cb_wptr, cb_wrap;
 extern int iframe_buff[IFRAME_BUFSIZE], iframe_buff_wpos, iframe_buff_rpos, header_wptr;
 extern unsigned int tl_cnt, mjpeg_cnt, image_cnt, image2_cnt, lapse_cnt, video_cnt;
 extern char *filename_recording;
@@ -76,13 +75,19 @@ extern unsigned char buffering, buffering_toggle;
 extern char *box_files[MAX_BOX_FILES];
 extern int box_head;
 extern int box_tail;
-
 //hold config file data for both dflt and user config files and u long versions
-#define KEY_COUNT 64
+#define KEY_COUNT 74
 extern char *cfg_strd[KEY_COUNT + 1];
 extern char *cfg_stru[KEY_COUNT + 1];
 extern long int cfg_val[KEY_COUNT + 1];
 extern char *cfg_key[];
+
+//motion detect data
+extern int motion_width, motion_height, motion_img_width, motion_img_height;
+extern int motion_frame_count;
+extern int motion_changes;
+extern int motion_state;
+extern unsigned char *mask_buffer_mem, *mask_buffer;
 
 typedef enum cfgkey_type
    {
@@ -100,7 +105,9 @@ typedef enum cfgkey_type
    c_MP4Box,c_MP4Box_fps,
    c_image_width,c_image_height,c_image_quality,c_tl_interval,
    c_preview_path,c_image_path,c_lapse_path,c_video_path,c_status_file,c_control_file,c_media_path,c_macros_path,c_subdir_char,
-   c_thumb_gen,c_autostart,c_motion_detection,c_user_config,c_log_file,c_watchdog_interval,c_watchdog_errors
+   c_thumb_gen,c_autostart,c_motion_detection,c_motion_file,c_vector_preview,c_vector_mode,c_motion_external,
+   c_motion_noise,c_motion_threshold,c_motion_image,c_motion_startframes,c_motion_stopframes,c_motion_pipe,
+   c_user_config,c_log_file,c_watchdog_interval,c_watchdog_errors
    } cfgkey_type; 
 
 time_t currTime;
@@ -116,6 +123,8 @@ void makeFilename(char** filename, char *template);
 void createMediaPath(char* filename);
 int copy_file(char *from_filename, char *to_filename);
 time_t get_mtime(const char *path);
+void check_box_files();
+void send_schedulecmd(char *cmd);
 
 //Camera
 void cam_set_annotationV3 (char *filename_temp, MMAL_BOOL_T enable);
@@ -126,7 +135,7 @@ void start_video(unsigned char prepare_buf);
 void stop_video(unsigned char stop_buf);
 void cam_stop_buffering ();
 void cam_set_buffer ();
-void cam_set_ip ();
+void cam_set_ip (int std);
 void cam_set_em ();
 void cam_set_wb ();
 void cam_set_mm ();
@@ -135,12 +144,19 @@ void cam_set_ce ();
 void cam_set_flip ();
 void cam_set_roi ();
 void cam_set(int key);
+void h264_enable_output ();
 void start_all (int load_conf);
 void stop_all (void);
 
 //Cmds
 void process_cmd(char *readbuf, int length);
 void exec_macro(char *macro);
+
+//Motion
+void setup_motiondetect();
+void send_motionstart();
+void send_motionend();
+void analyse_vectors(unsigned char *buffer);
 
 //Main
 void set_counts();
@@ -150,4 +166,3 @@ void addUserValue(int key, char *value);
 void saveUserConfig(char *cfilename);
 void read_config(char *cfilename, int type);
 void monitor();
-

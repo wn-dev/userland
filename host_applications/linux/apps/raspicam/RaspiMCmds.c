@@ -40,12 +40,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * Pipe Commands all start with 2 char identifier
  * Usage information in README_RaspiMJPEG.md
  */
-
+//#define MOTION_INTERNAL
 #include "RaspiMJPEG.h"
 
 void process_cmd(char *readbuf, int length) {
-   typedef enum pipe_cmd_type{ca,im,tl,px,bo,tv,an,as,at,ac,ab,sh,co,br,sa,is,vs,rl,ec,em,wb,mm,ie,ce,ro,fl,ri,ss,qu,pv,bi,ru,md,sc,rs,bu,wd,sy} pipe_cmd_type;
-   char pipe_cmds[] = "ca,im,tl,px,bo,tv,an,as,at,ac,ab,sh,co,br,sa,is,vs,rl,ec,em,wb,mm,ie,ce,ro,fl,ri,ss,qu,pv,bi,ru,md,sc,rs,bu,wd,sy";
+   typedef enum pipe_cmd_type{ca,im,tl,px,bo,tv,an,as,at,ac,ab,sh,co,br,sa,is,vs,rl,ec,em,wb,mm,ie,ce,ro,fl,ri,ss,qu,pv,bi,ru,md,sc,rs,bu,mn,mt,mi,mb,me,mx,vm,vp,wd,sy} pipe_cmd_type;
+   char pipe_cmds[] = "ca,im,tl,px,bo,tv,an,as,at,ac,ab,sh,co,br,sa,is,vs,rl,ec,em,wb,mm,ie,ce,ro,fl,ri,ss,qu,pv,bi,ru,md,sc,rs,bu,mn,mt,mi,mb,me,mx,vm,vp,wd,sy";
    pipe_cmd_type pipe_cmd;
    int i;
    char pars[128][10];
@@ -55,7 +55,7 @@ void process_cmd(char *readbuf, int length) {
    
    //Sanitise buffer and return if no good
    if (length == 2) length++;
-   if (length < 3 || length > 256) return;
+   if (length < 3) return;
    readbuf[length] = 0;
    readbuf[2] = 0;
    
@@ -194,6 +194,7 @@ void process_cmd(char *readbuf, int length) {
          key = c_sensor_region_x;
          break;
       case ss:
+         addUserValue(c_shutter_speed, pars[0]);
          key = c_shutter_speed;
          break;
       case qu:
@@ -227,21 +228,40 @@ void process_cmd(char *readbuf, int length) {
          }
          updateStatus();
          break;
-      case md:
-         if(par0 == 0) {
-            if(system("killall motion") == -1) error("Could not stop Motion", 1);
-            cfg_val[c_motion_detection] = 0;
-            printLog("Motion detection stopped\n");
+      case mx:
+         key = c_motion_external;
+         //If switching to internal with motion detection on then try to kill external motion
+         if (cfg_val[c_motion_detection] != 0 && !par0) {
+            if(system("killall motion") == -1) error("Could not stop external motion", 1);
+            printLog("External motion detection stopped\n");
          }
-         else {
-            if (cfg_val[c_motion_detection] == 0) {
-               if(system("motion") == -1) error("Could not start Motion", 1);
-               printLog("Motion detection started\n");
-               cfg_val[c_motion_detection] = 1;
-            } else {
-               printLog("Motion already running. md 1 ignored\n");
+         break;
+      case md:
+         stop_all();
+         if (cfg_val[c_motion_external]) {
+            if(par0 == 0) {
+               if(system("killall motion") == -1) error("Could not stop external motion", 1);
+               printLog("External motion detection stopped\n");
+            }
+            else {
+               if (cfg_val[c_motion_detection] == 0) {
+                  if(system("motion") == -1) error("Could not start external motion", 1);
+                  printLog("External motion detection started\n");
+               } else {
+                  printLog("Motion already running. md 1 ignored\n");
+               }
+            }
+         } else {
+            if(par0 == 0) {
+               printLog("Internal motion detection stopped\n");
+            }
+            else {
+               setup_motiondetect();
+               printLog("Internal motion detection started\n");
             }
          }
+         cfg_val[c_motion_detection] = par0?1:0;
+         start_all(0);
          updateStatus();
          break;
       case sc:
@@ -257,6 +277,29 @@ void process_cmd(char *readbuf, int length) {
          break;
       case bu:
          key = c_video_buffer;
+         break;
+      case vp:
+         stop_all();
+         addUserValue(c_vector_preview, pars[0]);
+         start_all(0);
+         break;
+      case mn:
+         key = c_motion_noise;
+         break;
+      case mt:
+         key = c_motion_threshold;
+         break;
+      case mi:
+         key = c_motion_image + 1000;
+         break;
+      case mb:
+         key = c_motion_startframes;
+         break;
+      case me:
+         key = c_motion_stopframes;
+         break;
+      case vm:
+         key = c_vector_mode;
          break;
       case sy:
          exec_macro(parstring);

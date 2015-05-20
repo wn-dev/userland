@@ -46,30 +46,26 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * commands with a unix-pipe and showes its status on stdout and writes it into
  * a status-file. The program terminates itself after receiving a SIGINT or
  * SIGTERM.
- *
- * Usage information in README_RaspiMJPEG.md
  */
 
 #include "RaspiMJPEG.h"
 
 MMAL_STATUS_T status;
-MMAL_COMPONENT_T *camera = 0, *jpegencoder = 0, *jpegencoder2 = 0, *h264encoder = 0, *resizer = 0;
-MMAL_CONNECTION_T *con_cam_res, *con_res_jpeg, *con_cam_h264, *con_cam_jpeg;
-FILE *jpegoutput_file = NULL, *jpegoutput2_file = NULL, *h264output_file = NULL, *status_file = NULL;
-MMAL_POOL_T *pool_jpegencoder, *pool_jpegencoder2, *pool_h264encoder;
+MMAL_COMPONENT_T *camera = 0, *jpegencoder = 0, *jpegencoder2 = 0, *h264encoder = 0, *resizer = 0, *null_sink = 0, *splitter = 0;
+MMAL_CONNECTION_T *con_cam_pre = 0, *con_spli_res = 0, *con_spli_h264 = 0, *con_res_jpeg = 0, *con_cam_h264 = 0, *con_cam_jpeg = 0;
+FILE *jpegoutput_file = NULL, *jpegoutput2_file = NULL, *h264output_file = NULL, *status_file = NULL, *motion_file = NULL;
+MMAL_POOL_T *pool_jpegencoder = 0, *pool_jpegencoder_in = 0, *pool_jpegencoder2 = 0, *pool_h264encoder = 0;
 char *cb_buff = NULL;
 char header_bytes[29];
-int cb_len, cb_wptr, cb_wrap, cb_data;
+int cb_len, cb_wptr, cb_wrap;
 int iframe_buff[IFRAME_BUFSIZE], iframe_buff_wpos, iframe_buff_rpos, header_wptr;
 unsigned int tl_cnt=0, mjpeg_cnt=0, image_cnt=0, image2_cnt=0, lapse_cnt=0, video_cnt=0;
 char *filename_recording = 0;
 unsigned char timelapse=0, running=1, autostart=1, idle=0, a_error=0, v_capturing=0, i_capturing=0, v_boxing=0;
 unsigned char buffering=0, buffering_toggle=0;
-
 char *box_files[MAX_BOX_FILES];
 int box_head=0;
 int box_tail=0;
-
 char *cfg_strd[KEY_COUNT + 1];
 char *cfg_stru[KEY_COUNT + 1];
 long int cfg_val[KEY_COUNT + 1];
@@ -89,7 +85,9 @@ char *cfg_key[] ={
    "MP4Box","MP4Box_fps",
    "image_width","image_height","image_quality","tl_interval",
    "preview_path","image_path","lapse_path","video_path","status_file","control_file","media_path","macros_path","subdir_char",
-   "thumb_gen","autostart","motion_detection","user_config","log_file","watchdog_interval","watchdog_errors"
+   "thumb_gen","autostart","motion_detection","motion_file","vector_preview","vector_mode", "motion_external",
+   "motion_noise","motion_threshold","motion_image","motion_startframes","motion_stopframes","motion_pipe",
+   "user_config","log_file","watchdog_interval","watchdog_errors",
 };
 
 
@@ -208,10 +206,8 @@ void monitor() {
       }
    }
 }
-
 int main (int argc, char* argv[]) {
    monitor();
-   
    int i, fd, length;
    int watchdog = 0, watchdog_errors = 0;
    int box_check = 0;
@@ -245,9 +241,6 @@ int main (int argc, char* argv[]) {
    printLog("RaspiMJPEG Version %s\n", VERSION);
    
    if(cfg_val[c_autostart]) start_all(0);
-   if(cfg_val[c_motion_detection]) {
-      if(system("motion") == -1) error("Could not start Motion", 1);
-   }
 
    //
    // run
@@ -276,6 +269,8 @@ int main (int argc, char* argv[]) {
       close(fd);
    } while (length != 0); 
   
+  //Send restart signal to scheduler
+  send_schedulecmd("9");
    // Main forever loop
    while(running) {
       if(cfg_stru[c_control_file] != 0) {
@@ -336,6 +331,5 @@ int main (int argc, char* argv[]) {
    // tidy up
    //
    if(!idle) stop_all();
-   system("killall motion");
    return 0;
 }
