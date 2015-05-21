@@ -46,6 +46,7 @@ int motion_width, motion_height, motion_img_width, motion_img_height;
 int motion_frame_count;
 int motion_changes;
 int motion_state; // 0 search for start, 1 search for stop
+int motion_vector_count;
 unsigned char *mask_buffer_mem, *mask_buffer;
 
 // initialise variables, set up mask buffer from a pbm file if present
@@ -55,6 +56,7 @@ void setup_motiondetect() {
    int mask_valid = 0;
    
    mask_size = motion_width * motion_height;
+   printLog("Set up internal detect width=%d height=%d\n", motion_width, motion_height);
    
    motion_frame_count = 0;
    motion_state = 0;
@@ -89,6 +91,7 @@ void setup_motiondetect() {
    //Try to delete a motion data capture file if defined
    if (cfg_stru[c_motion_file] != 0) {
       remove(cfg_stru[c_motion_file]);
+      motion_vector_count = 0;
    }
 }
 

@@ -186,9 +186,8 @@ static void h264encoder_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T
       }
     }
     if(cfg_stru[c_motion_file] != 0 && cfg_val[c_motion_detection] != 0) {
-      struct stat mf_buf;
-      //Append data to get an extended record of motion data, Enforce size limit on motion vector file
-      if (stat(cfg_stru[c_motion_file], &mf_buf) == -1 || mf_buf.st_size < MAX_MOTION_FILE) {
+      //Append data to get an extended record of motion data up to a maximum
+      if (motion_vector_count++ < MAX_MOTION_VECTOR_COUNT) {
          motion_file = fopen(cfg_stru[c_motion_file], "a");
          if(motion_file == NULL) error("Could not open motion-destination", 1);
          bytes_written = fwrite(buffer->data, 1, buffer->length, motion_file);
