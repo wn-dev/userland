@@ -71,7 +71,7 @@ void setup_motiondetect() {
          //search for mask size string, data should be 1 byte after this
          mask_buffer = strstr(mask_buffer_mem, "255");
          if (mask_buffer != NULL) {
-            mask_buffer++;
+            mask_buffer +=3;
             //check size from this point
             if ((mask_buffer_mem + mask_len - mask_buffer) >= mask_size) {
                mask_valid = 1;
@@ -80,7 +80,10 @@ void setup_motiondetect() {
       }
       if (!mask_valid) {
          free(mask_buffer_mem);
+         mask_buffer = 0;
          error("invalid motion mask", 0);
+      } else {
+         printLog("Motion mask %s loaded\n", cfg_stru[c_motion_image]);
       }
    }
    //Try to delete a motion data capture file if defined
@@ -100,13 +103,16 @@ void send_motion_stop() {
 void analyse_vectors(unsigned char *buffer) {
    if(cfg_val[c_motion_detection] && !cfg_val[c_motion_external]) {
       unsigned char high_noise = 255 - cfg_val[c_motion_noise], low_noise = cfg_val[c_motion_noise];
-      int i, row, col;
+      int i, m, row, col;
       i = 0;
+      m = 0;
       motion_changes = 0;
       for(row=0; row<motion_height; row++) {
          for(col=0; col<motion_width; col++) {
-            if(buffer[i] > low_noise && buffer[i] < high_noise) motion_changes++;
-            if(buffer[i+1] > low_noise && buffer[i+1] < high_noise) motion_changes++;
+            if (mask_buffer == 0 || mask_buffer[m++]) {
+               if(buffer[i] > low_noise && buffer[i] < high_noise) motion_changes++;
+               if(buffer[i+1] > low_noise && buffer[i+1] < high_noise) motion_changes++;
+            }
             i+=4;
          }
       }
