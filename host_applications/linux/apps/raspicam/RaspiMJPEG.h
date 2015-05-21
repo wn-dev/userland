@@ -83,6 +83,7 @@ extern long int cfg_val[KEY_COUNT + 1];
 extern char *cfg_key[];
 
 //motion detect data
+#define MAX_MOTION_FILE 10000000
 extern int motion_width, motion_height, motion_img_width, motion_img_height;
 extern int motion_frame_count;
 extern int motion_changes;
