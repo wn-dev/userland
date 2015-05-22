@@ -59,7 +59,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 extern MMAL_STATUS_T status;
 extern MMAL_COMPONENT_T *camera, *jpegencoder, *jpegencoder2, *h264encoder, *resizer, *null_sink, *splitter;
 extern MMAL_CONNECTION_T *con_cam_pre, *con_spli_res, *con_spli_h264, *con_res_jpeg, *con_cam_h264, *con_cam_jpeg;
-extern FILE *jpegoutput_file, *jpegoutput2_file, *h264output_file, *status_file, *motion_file;
+extern FILE *jpegoutput_file, *jpegoutput2_file, *h264output_file, *status_file, *vector_file;
 extern MMAL_POOL_T *pool_jpegencoder, *pool_jpegencoder_in, *pool_jpegencoder2, *pool_h264encoder;
 extern char *cb_buff;
 extern char header_bytes[29];
@@ -83,12 +83,13 @@ extern long int cfg_val[KEY_COUNT + 1];
 extern char *cfg_key[];
 
 //motion detect data
-#define MAX_MOTION_VECTOR_COUNT 400
+#define VECTOR_BUFFER_FRAMES 100
 extern int motion_width, motion_height, motion_img_width, motion_img_height;
 extern int motion_frame_count;
 extern int motion_changes;
 extern int motion_state;
-extern int motion_vector_count;
+extern int vector_buffer_index;
+extern unsigned char *vector_buffer;
 extern unsigned char *mask_buffer_mem, *mask_buffer;
 
 typedef enum cfgkey_type
@@ -158,7 +159,10 @@ void exec_macro(char *macro);
 void setup_motiondetect();
 void send_motionstart();
 void send_motionend();
-void analyse_vectors(unsigned char *buffer);
+void analyse_vectors(MMAL_BUFFER_HEADER_T *buffer);
+void start_vectors(char *vectorname);
+void stop_vectors();
+void save_vectors(MMAL_BUFFER_HEADER_T *buffer);
 
 //Main
 void set_counts();

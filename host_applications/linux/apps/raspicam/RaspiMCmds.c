@@ -44,8 +44,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "RaspiMJPEG.h"
 
 void process_cmd(char *readbuf, int length) {
-   typedef enum pipe_cmd_type{ca,im,tl,px,bo,tv,an,as,at,ac,ab,sh,co,br,sa,is,vs,rl,ec,em,wb,mm,ie,ce,ro,fl,ri,ss,qu,pv,bi,ru,md,sc,rs,bu,mn,mt,mi,mb,me,mx,vm,vp,wd,sy} pipe_cmd_type;
-   char pipe_cmds[] = "ca,im,tl,px,bo,tv,an,as,at,ac,ab,sh,co,br,sa,is,vs,rl,ec,em,wb,mm,ie,ce,ro,fl,ri,ss,qu,pv,bi,ru,md,sc,rs,bu,mn,mt,mi,mb,me,mx,vm,vp,wd,sy";
+   typedef enum pipe_cmd_type{ca,im,tl,px,bo,tv,an,as,at,ac,ab,sh,co,br,sa,is,vs,rl,ec,em,wb,mm,ie,ce,ro,fl,ri,ss,qu,pv,bi,ru,md,sc,rs,bu,mn,mt,mi,mb,me,mx,mf,vm,vp,wd,sy} pipe_cmd_type;
+   char pipe_cmds[] = "ca,im,tl,px,bo,tv,an,as,at,ac,ab,sh,co,br,sa,is,vs,rl,ec,em,wb,mm,ie,ce,ro,fl,ri,ss,qu,pv,bi,ru,md,sc,rs,bu,mn,mt,mi,mb,me,mx,mf,vm,vp,wd,sy";
    pipe_cmd_type pipe_cmd;
    int i;
    char pars[128][10];
@@ -256,7 +256,6 @@ void process_cmd(char *readbuf, int length) {
                printLog("Internal motion detection stopped\n");
             }
             else {
-               setup_motiondetect();
                printLog("Internal motion detection started\n");
             }
          }
@@ -297,6 +296,9 @@ void process_cmd(char *readbuf, int length) {
          break;
       case me:
          key = c_motion_stopframes;
+         break;
+      case mf:
+         key = c_motion_file;
          break;
       case vm:
          key = c_vector_mode;

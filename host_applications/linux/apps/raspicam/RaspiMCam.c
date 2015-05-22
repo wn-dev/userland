@@ -185,18 +185,7 @@ static void h264encoder_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T
         }
       }
     }
-    if(cfg_stru[c_motion_file] != 0 && cfg_val[c_motion_detection] != 0) {
-      //Append data to get an extended record of motion data up to a maximum
-      if (motion_vector_count++ < MAX_MOTION_VECTOR_COUNT) {
-         motion_file = fopen(cfg_stru[c_motion_file], "a");
-         if(motion_file == NULL) error("Could not open motion-destination", 1);
-         bytes_written = fwrite(buffer->data, 1, buffer->length, motion_file);
-         if(bytes_written != buffer->length) error("Could not write all bytes motion", 0);
-         fclose(motion_file);
-      }
-      motion_file = NULL;
-    }
-    analyse_vectors(buffer->data);
+    analyse_vectors(buffer);
   }
   else if(buffering_toggle) {
     
@@ -468,6 +457,8 @@ void start_video(unsigned char prepare_buf) {
       if(cfg_val[c_MP4Box] != 0) {
         asprintf(&filename_temp, "%s.h264", filename_recording);
         thumb_create(filename_recording, 'v');
+        createMediaPath(filename_temp);
+        start_vectors(filename_recording);
       }
       else {
         //trim off extension
@@ -475,11 +466,12 @@ void start_video(unsigned char prepare_buf) {
         if (ext != NULL) *ext = 0;
         asprintf(&filename_temp, "%s.h264", filename_recording);
         thumb_create(filename_temp, 'v');
+        createMediaPath(filename_temp);
+        start_vectors(filename_temp);
         //restore full filename
         if (ext != NULL) *ext = '.';
         free(filename_recording);
       }
-      createMediaPath(filename_temp);
       h264output_file = fopen(filename_temp, "wb");
       free(filename_temp);
       if(!h264output_file) {error("Could not open/create video-file", 0); return;}
@@ -576,6 +568,7 @@ void stop_video(unsigned char stop_buf) {
     }
     updateStatus();
   }
+  stop_vectors();
 }
 
 void cam_stop_buffering () {
@@ -1179,6 +1172,9 @@ void start_all (int load_conf) {
    cam_set(c_hflip);
    cam_set(c_sensor_region_x);
    cam_set_annotation();
+   
+   setup_motiondetect();
+
 }
 
 

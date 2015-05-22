@@ -53,7 +53,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 MMAL_STATUS_T status;
 MMAL_COMPONENT_T *camera = 0, *jpegencoder = 0, *jpegencoder2 = 0, *h264encoder = 0, *resizer = 0, *null_sink = 0, *splitter = 0;
 MMAL_CONNECTION_T *con_cam_pre = 0, *con_spli_res = 0, *con_spli_h264 = 0, *con_res_jpeg = 0, *con_cam_h264 = 0, *con_cam_jpeg = 0;
-FILE *jpegoutput_file = NULL, *jpegoutput2_file = NULL, *h264output_file = NULL, *status_file = NULL, *motion_file = NULL;
+FILE *jpegoutput_file = NULL, *jpegoutput2_file = NULL, *h264output_file = NULL, *status_file = NULL, *vector_file = NULL;
 MMAL_POOL_T *pool_jpegencoder = 0, *pool_jpegencoder_in = 0, *pool_jpegencoder2 = 0, *pool_h264encoder = 0;
 char *cb_buff = NULL;
 char header_bytes[29];
