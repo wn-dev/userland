@@ -246,14 +246,29 @@ int main (int argc, char* argv[]) {
    // run
    //
    if(cfg_val[c_autostart]) {
-      if(cfg_stru[c_control_file] != 0) printLog("MJPEG streaming, ready to receive commands\n");
-      else printLog("MJPEG streaming\n");
+      if(cfg_stru[c_control_file] != 0){
+         printLog("MJPEG streaming, ready to receive commands\n");
+         //kick off motion detection at start if required.
+         if(cfg_val[c_motion_detection] && cfg_val[c_motion_external]) {
+            char *cmd_temp;
+            asprintf(&cmd_temp, "%s", "md 0");
+            process_cmd(cmd_temp, 4);
+            sleep(1);
+            cmd_temp[3] = '1';
+            process_cmd(cmd_temp, 4);
+            free(cmd_temp);
+         }
+      } else {
+         printLog("MJPEG streaming\n");
+      }
    }
    else {
       if(cfg_stru[c_control_file] != 0) printLog("MJPEG idle, ready to receive commands\n");
       else printLog("MJPEG idle\n");
    }
 
+   updateStatus();
+ 
    struct sigaction action;
    memset(&action, 0, sizeof(struct sigaction));
    action.sa_handler = term;
