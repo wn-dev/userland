@@ -50,31 +50,35 @@ void process_cmd(char *readbuf, int length) {
    int i;
    char pars[128][10];
    long int par0;
-   char *parstring=0, *temp;
+   char *buf, *parstring=0, *temp;
    int key = -1;
    
    //Sanitise buffer and return if no good
    if (length == 2) length++;
    if (length < 3) return;
-   readbuf[length] = 0;
-   readbuf[2] = 0;
+   
+   //Use lcoal copy of readbuf
+   asprintf(&buf, "%s", readbuf);
+   buf[length] = 0;
+   buf[2] = 0;
    
    //find 2 letter command and translate into enum
-   temp = strstr(pipe_cmds, readbuf);
+   temp = strstr(pipe_cmds, buf);
    if (temp == NULL) return;
    pipe_cmd = (pipe_cmd_type)((temp - pipe_cmds) / 3);
    
    //extract space separated numeric parameters
    // and make separate string parameter (strtok changes the original)
-   asprintf(&parstring, "%s", readbuf+3);
+   asprintf(&parstring, "%s", buf+3);
    i = 0;
-   temp = strtok(readbuf+3, " ");
+   temp = strtok(buf+3, " ");
    while(i<10 && temp != NULL) {
       strcpy(pars[i], temp);
       i++;
       temp = strtok(NULL, " ");
    }
    par0 = strtol(pars[0], NULL, 10);
+   if (buf != 0) free(buf);
    
    switch(pipe_cmd) {
       case ca:

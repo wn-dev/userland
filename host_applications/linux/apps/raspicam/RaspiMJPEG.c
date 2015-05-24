@@ -111,7 +111,9 @@ int getKey(char *key) {
 }
 
 void addValue(int keyI, char *value, int both){
-   long int val=strtol(value, NULL, 10);
+   long int val=0;
+   if (strlen(value) > 0)
+      val=strtol(value, NULL, 10);
 
    if (cfg_stru[keyI] != 0) free(cfg_stru[keyI]);
       asprintf(&cfg_stru[keyI],"%s", value);
@@ -172,16 +174,18 @@ void read_config(char *cfilename, int type) {
    fp = fopen(cfilename, "r");
    if(fp != NULL) {
       while((length = getline(&line, &len, fp)) != -1) {
-         line[length-1] = 0;
-         value = strchr(line, ' ');
-         if (value != NULL) {
-            // split line into key, value
-            *value = 0;
-            value++;
-            value = trim(value);
-            if (strlen(line) > 0 && *line != '#' && strlen(value) > 0) {
-               addValue(getKey(line), value, type);
+         if (length > 1 && *line != '#') {
+            line[length-1] = 0;
+            value = strchr(line, ' ');
+            if (value == NULL) {
+               value = line + strlen(line);
+            } else {
+               // split line into key, value
+               *value = 0;
+               value++;
+               value = trim(value);
             }
+            addValue(getKey(line), value, type);
          }
       }
       if(line) free(line);
@@ -250,13 +254,9 @@ int main (int argc, char* argv[]) {
          printLog("MJPEG streaming, ready to receive commands\n");
          //kick off motion detection at start if required.
          if(cfg_val[c_motion_detection] && cfg_val[c_motion_external]) {
-            char *cmd_temp;
-            asprintf(&cmd_temp, "%s", "md 0");
-            process_cmd(cmd_temp, 4);
+            process_cmd("md 0", 4);
             sleep(1);
-            cmd_temp[3] = '1';
-            process_cmd(cmd_temp, 4);
-            free(cmd_temp);
+            process_cmd("md 1", 4);
          }
       } else {
          printLog("MJPEG streaming\n");
