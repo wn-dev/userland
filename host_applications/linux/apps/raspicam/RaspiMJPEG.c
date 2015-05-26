@@ -104,43 +104,46 @@ int getKey(char *key) {
    int i;
    for(i=0; i < KEY_COUNT; i++) {
       if(strcmp(key, cfg_key[i]) == 0) {
-         break;
+         return i;
       }
    }
-   return i;
+   return KEY_COUNT;
 }
 
 void addValue(int keyI, char *value, int both){
-   long int val=0;
-   if (strlen(value) > 0)
-      val=strtol(value, NULL, 10);
-
+   
    if (cfg_stru[keyI] != 0) free(cfg_stru[keyI]);
+   if (both && cfg_strd[keyI] != 0) free(cfg_strd[keyI]);
+   
+   if (value == NULL || strlen(value) == 0) {
+      cfg_val[keyI] = 0;
+   } else {
+      int val=strtol(value, NULL, 10);
       asprintf(&cfg_stru[keyI],"%s", value);
-   if (both) {
-      if (cfg_strd[keyI] != 0) free(cfg_strd[keyI]);
-      asprintf(&cfg_strd[keyI],"%s", value);
+      if (both) {
+         asprintf(&cfg_strd[keyI],"%s", value);
+      }
+      if (strcmp(value, "true") == 0)
+         val = 1;
+      else if (strcmp(value, "false") == 0)
+         val = 0;
+      switch(keyI) {
+         case c_autostart:
+            if(strcmp(value, "idle") == 0) {
+               val = 0;
+               idle = 1;
+            }else if(strcmp(value, "standard") == 0) { 
+               val = 1;
+               idle = 0;
+            };
+            updateStatus();
+            break;
+         case c_MP4Box:
+            if(strcmp(value, "background") == 0)
+               val = 2;
+      }
+      cfg_val[keyI] = val;
    }
-   if (strcmp(value, "true") == 0)
-      val = 1;
-   else if (strcmp(value, "false") == 0)
-      val = 0;
-   switch(keyI) {
-      case c_autostart:
-         if(strcmp(value, "idle") == 0) {
-            val = 0;
-            idle = 1;
-         }else if(strcmp(value, "standard") == 0) { 
-            val = 1;
-            idle = 0;
-         };
-         updateStatus();
-         break;
-      case c_MP4Box:
-         if(strcmp(value, "background") == 0)
-            val = 2;
-   }
-   cfg_val[keyI] = val;
 }
 
 void addUserValue(int key, char *value){
@@ -170,22 +173,23 @@ void read_config(char *cfilename, int type) {
    unsigned int len = 0;
    char *line = NULL;
    char *value = NULL;
+   int key;
 
    fp = fopen(cfilename, "r");
    if(fp != NULL) {
       while((length = getline(&line, &len, fp)) != -1) {
-         if (length > 1 && *line != '#') {
+         if (length > 3 && *line != '#') {
             line[length-1] = 0;
             value = strchr(line, ' ');
-            if (value == NULL) {
-               value = line + strlen(line);
-            } else {
+            if (value != NULL) {
                // split line into key, value
                *value = 0;
                value++;
                value = trim(value);
             }
-            addValue(getKey(line), value, type);
+            key = getKey(line);
+            if (key < KEY_COUNT)
+               addValue(key, value, type);
          }
       }
       if(line) free(line);
