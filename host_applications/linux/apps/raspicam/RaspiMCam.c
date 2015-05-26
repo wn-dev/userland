@@ -995,7 +995,14 @@ void start_all (int load_conf) {
    h264encoder->output[0]->buffer_size = h264encoder->output[0]->buffer_size_recommended;
    if(h264encoder->output[0]->buffer_size < h264encoder->output[0]->buffer_size_min)
      h264encoder->output[0]->buffer_size = h264encoder->output[0]->buffer_size_min;
-   h264encoder->output[0]->buffer_num = h264encoder->output[0]->buffer_num_recommended;
+   printLog("recommended video buffers %d\n", h264encoder->output[0]->buffer_num_recommended);
+   if(cfg_val[c_h264_buffers] == 0) {
+      printLog("h264 buffers set to recommended %d\n", h264encoder->output[0]->buffer_num_recommended);
+      h264encoder->output[0]->buffer_num = h264encoder->output[0]->buffer_num_recommended;
+   } else {
+      printLog("h264 buffers set to config %d\n", cfg_val[c_h264_buffers]);
+      h264encoder->output[0]->buffer_num = cfg_val[c_h264_buffers];
+   }
    if(h264encoder->output[0]->buffer_num < h264encoder->output[0]->buffer_num_min)
      h264encoder->output[0]->buffer_num = h264encoder->output[0]->buffer_num_min;
    h264encoder->output[0]->format->es->video.frame_rate.num = 0;
