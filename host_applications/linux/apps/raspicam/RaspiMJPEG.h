@@ -76,7 +76,7 @@ extern char *box_files[MAX_BOX_FILES];
 extern int box_head;
 extern int box_tail;
 //hold config file data for both dflt and user config files and u long versions
-#define KEY_COUNT 75
+#define KEY_COUNT 76
 extern char *cfg_strd[KEY_COUNT + 1];
 extern char *cfg_stru[KEY_COUNT + 1];
 extern long int cfg_val[KEY_COUNT + 1];
@@ -107,7 +107,7 @@ typedef enum cfgkey_type
    c_video_width,c_video_height,c_video_fps,c_video_bitrate,c_video_buffer,
    c_MP4Box,c_MP4Box_fps,
    c_image_width,c_image_height,c_image_quality,c_tl_interval,
-   c_preview_path,c_image_path,c_lapse_path,c_video_path,c_status_file,c_control_file,c_media_path,c_macros_path,c_subdir_char,
+   c_base_path,c_preview_path,c_image_path,c_lapse_path,c_video_path,c_status_file,c_control_file,c_media_path,c_macros_path,c_subdir_char,
    c_thumb_gen,c_autostart,c_motion_detection,c_motion_file,c_vector_preview,c_vector_mode,c_motion_external,
    c_motion_noise,c_motion_threshold,c_motion_image,c_motion_startframes,c_motion_stopframes,c_motion_pipe,
    c_user_config,c_log_file,c_watchdog_interval,c_watchdog_errors, c_h264_buffers
@@ -123,6 +123,7 @@ void error (const char *string, char fatal);
 int findNextCount(char* folder, char* source);
 char* trim(char*s);
 void makeFilename(char** filename, char *template);
+void createPath(char* filename, char* path);
 void createMediaPath(char* filename);
 int copy_file(char *from_filename, char *to_filename);
 time_t get_mtime(const char *path);

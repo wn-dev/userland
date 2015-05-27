@@ -236,16 +236,16 @@ void makeFilename(char** filename, char *template) {
    free(template1);
 }
 
-void createMediaPath(char* filename) {
+void createPath(char* filename, char* path) {
    char* s;
    char* t;
    int r = 0;
    struct stat buf;
    //Create folders under media in filename as needed
-   if (strncmp(filename, cfg_stru[c_media_path], strlen(cfg_stru[c_media_path])) == 0) {
-      stat(cfg_stru[c_media_path], &buf);
+   if (strncmp(filename, path, strlen(path)) == 0) {
+      stat(path, &buf);
       //s to trailing path
-      s = filename + strlen(cfg_stru[c_media_path]) + 1;
+      s = filename + strlen(path) + 1;
       do {
          t = strchr(s, '/');
          if (t != NULL) {
@@ -262,6 +262,10 @@ void createMediaPath(char* filename) {
          }
       } while (t != NULL && r == 0);
    }
+}
+
+void createMediaPath(char *filename) {
+   createPath(filename, cfg_stru[c_media_path]);
 }
 
 int copy_file(char *from_filename, char *to_filename)
