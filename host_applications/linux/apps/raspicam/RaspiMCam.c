@@ -454,11 +454,12 @@ void start_video(unsigned char prepare_buf) {
       currTime = time(NULL);
       localTime = localtime (&currTime);
       makeFilename(&filename_recording, cfg_stru[c_video_path]);
+      createMediaPath(filename_recording);
       if(cfg_val[c_MP4Box] != 0) {
-        asprintf(&filename_temp, "%s.h264", filename_recording);
         thumb_create(filename_recording, 'v');
-        createMediaPath(filename_temp);
         start_vectors(filename_recording);
+        makeBoxname(&filename_temp, filename_recording);
+        h264output_file = fopen(filename_temp, "wb");
       }
       else {
         //trim off extension
@@ -466,13 +467,12 @@ void start_video(unsigned char prepare_buf) {
         if (ext != NULL) *ext = 0;
         asprintf(&filename_temp, "%s.h264", filename_recording);
         thumb_create(filename_temp, 'v');
-        createMediaPath(filename_temp);
         start_vectors(filename_temp);
         //restore full filename
         if (ext != NULL) *ext = '.';
         free(filename_recording);
+        h264output_file = fopen(filename_temp, "wb");
       }
-      h264output_file = fopen(filename_temp, "wb");
       free(filename_temp);
       if(!h264output_file) {error("Could not open/create video-file", 0); return;}
       if(buffering) {

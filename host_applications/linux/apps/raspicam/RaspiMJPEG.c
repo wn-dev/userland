@@ -82,7 +82,7 @@ char *cfg_key[] ={
    "shutter_speed","raw_layer",
    "width","quality","divider",
    "video_width","video_height","video_fps","video_bitrate","video_buffer",
-   "MP4Box","MP4Box_fps",
+   "MP4Box","MP4Box_fps","boxing_path",
    "image_width","image_height","image_quality","tl_interval",
    "base_path","preview_path","image_path","lapse_path","video_path","status_file","control_file","media_path","macros_path","subdir_char",
    "thumb_gen","autostart","motion_detection","motion_file","vector_preview","vector_mode", "motion_external",
@@ -247,6 +247,13 @@ int main (int argc, char* argv[]) {
       read_config(cfg_stru[c_user_config], 0);
 
    createPath(cfg_stru[c_log_file], cfg_stru[c_base_path]);
+   if (cfg_stru[c_boxing_path] != NULL) {
+      char *bpath;
+      asprintf(&bpath, "%s/temp", cfg_stru[c_boxing_path]);
+      createPath(bpath, cfg_stru[c_base_path]);
+      free(bpath);
+   }
+   
    printLog("RaspiMJPEG Version %s\n", VERSION);
    
    if(cfg_val[c_autostart]) start_all(0);

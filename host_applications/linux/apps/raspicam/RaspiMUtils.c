@@ -181,8 +181,8 @@ char* trim(char*s) {
    return s;
 }
 
-void makeFilename(char** filename, char *template) {
-   //Create filename from template
+void makeName(char** name, char *template) {
+   //Create name from template
    const int max_subs = 16;
    char spec[13] = "%YyMDhmsvitfc";
    char *template1;
@@ -232,8 +232,20 @@ void makeFilename(char** filename, char *template) {
       }
    } while(s != NULL);
    
-   asprintf(filename, template1, p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], p[9], p[10], p[11], p[12], p[13], p[14], p[15]); 
+   asprintf(name, template1, p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], p[9], p[10], p[11], p[12], p[13], p[14], p[15]); 
    free(template1);
+}
+
+void makeFilename(char** filename, char* template) {
+   char *template1;
+   //allow paths to be relative to media path
+   if (*template != '/') {
+      asprintf(&template1,"%s/%s",cfg_stru[c_media_path], template);
+      makeName(filename, template1);
+      free(template1);
+   } else {
+      makeName(filename, template);
+   }
 }
 
 void createPath(char* filename, char* path) {
@@ -241,8 +253,8 @@ void createPath(char* filename, char* path) {
    char* t;
    int r = 0;
    struct stat buf;
-   //Create folders under media in filename as needed
-   if (strncmp(filename, path, strlen(path)) == 0) {
+   //Create folders under path in filename as needed
+   if (filename != NULL && strncmp(filename, path, strlen(path)) == 0) {
       stat(path, &buf);
       //s to trailing path
       s = filename + strlen(path) + 1;
@@ -298,6 +310,18 @@ time_t get_mtime(const char *path) {
    return statbuf.st_mtime;
 }
 
+void makeBoxname(char** boxname, char *filename) {
+   char *temp;
+   if (cfg_stru[c_boxing_path] != NULL) {
+      temp = strrchr(filename, '/');
+      if (temp != NULL) {
+         asprintf(boxname, "%s/%s.h264", cfg_stru[c_boxing_path], temp+1);
+         return;
+      }
+   }
+   asprintf(boxname, "%s.h264", filename);
+}
+
 int get_box_count() {
    if (box_head >= box_tail)
       return box_head - box_tail;
@@ -319,7 +343,7 @@ void add_box_file(char *boxfile) {
 void check_box_files() {
    char *cmd_temp = 0, *filename_temp = 0;
    if (v_boxing > 0) {
-      asprintf(&filename_temp, "%s.h264", box_files[box_tail]);
+      makeBoxname(&filename_temp, box_files[box_tail]);
       // check if current MP4Box finished by seeing if h264 now deleted
       if (access(filename_temp, F_OK ) == -1) {
          printLog("Finished boxing %s from Box Queue at pos %d\n", box_files[box_tail], box_tail);
@@ -332,9 +356,9 @@ void check_box_files() {
    }
    if(v_boxing == 0 && get_box_count() > 0) {
       //start new MP4Box operation
-      asprintf(&filename_temp, "%s.h264", box_files[box_tail]);
+      makeBoxname(&filename_temp, box_files[box_tail]);
       asprintf(&cmd_temp, "(MP4Box -fps %i -add %s %s > /dev/null;rm \"%s\";) &", cfg_val[c_MP4Box_fps], filename_temp, box_files[box_tail], filename_temp);
-      printLog("Start boxing %s from Box Queue at pos %d\n", box_files[box_tail], box_tail);
+      printLog("Start boxing %s to %s Queue pos %d\n", filename_temp, box_files[box_tail], box_tail);
       system(cmd_temp);
       v_boxing = 1;
       free(cmd_temp);
