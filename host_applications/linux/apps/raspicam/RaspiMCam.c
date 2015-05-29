@@ -337,7 +337,7 @@ void cam_set_annotation() {
    if(cfg_stru[c_annotation] != 0) {
       currTime = time(NULL);
       localTime = localtime (&currTime);
-      makeFilename(&filename_temp, cfg_stru[c_annotation]);
+      makeName(&filename_temp, cfg_stru[c_annotation]);
       enable = MMAL_TRUE;
    } else {
       enable = MMAL_FALSE;
