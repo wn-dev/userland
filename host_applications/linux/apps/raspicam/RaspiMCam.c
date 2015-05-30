@@ -578,6 +578,7 @@ void cam_stop_buffering () {
     stop_video(1);
     if(cb_buff != NULL) {
       free(cb_buff);
+      cb_buff = NULL;
     }
   }
 }

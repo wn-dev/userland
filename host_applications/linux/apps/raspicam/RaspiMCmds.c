@@ -50,35 +50,37 @@ void process_cmd(char *readbuf, int length) {
    int i;
    char pars[128][10];
    long int par0;
-   char *buf, *parstring=0, *temp;
+   char cmd[3];
+   char par[MAX_COMMAND_LEN];
+   char *parstring=0, *temp;
    int key = -1;
    
-   //Sanitise buffer and return if no good
-   if (length == 2) length++;
-   if (length < 3) return;
+   if (length < 2 || length > (MAX_COMMAND_LEN - 2)) return;
    
-   //Use lcoal copy of readbuf
-   asprintf(&buf, "%s", readbuf);
-   buf[length] = 0;
-   buf[2] = 0;
-   
-   //find 2 letter command and translate into enum
-   temp = strstr(pipe_cmds, buf);
+   //Get cmd
+   strncpy(cmd, readbuf, 2);
+    //find 2 letter command and translate into enum
+   temp = strstr(pipe_cmds, cmd);
    if (temp == NULL) return;
    pipe_cmd = (pipe_cmd_type)((temp - pipe_cmds) / 3);
-   
-   //extract space separated numeric parameters
-   // and make separate string parameter (strtok changes the original)
-   asprintf(&parstring, "%s", buf+3);
-   i = 0;
-   temp = strtok(buf+3, " ");
-   while(i<10 && temp != NULL) {
-      strcpy(pars[i], temp);
-      i++;
-      temp = strtok(NULL, " ");
+  
+   if(length > 3) {
+      strcpy(par, readbuf + 3);
+      par[length-3] = 0;
+      //extract space separated numeric parameters
+      // and make separate string parameter (strtok changes the original)
+      asprintf(&parstring, "%s", par);
+      i = 0;
+      temp = strtok(par, " ");
+      while(i<10 && temp != NULL) {
+         strcpy(pars[i], temp);
+         i++;
+         temp = strtok(NULL, " ");
+      }
+      par0 = strtol(pars[0], NULL, 10);
+   } else {
+      par0 = 0;
    }
-   par0 = strtol(pars[0], NULL, 10);
-   if (buf != 0) free(buf);
    
    switch(pipe_cmd) {
       case ca:

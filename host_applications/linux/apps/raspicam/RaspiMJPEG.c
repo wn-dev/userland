@@ -112,8 +112,9 @@ int getKey(char *key) {
 
 void addValue(int keyI, char *value, int both){
    
-   if (cfg_stru[keyI] != 0) free(cfg_stru[keyI]);
-   if (both && cfg_strd[keyI] != 0) free(cfg_strd[keyI]);
+   free(cfg_stru[keyI]);
+   cfg_stru[keyI] = 0;
+   if (both) {free(cfg_strd[keyI]);cfg_strd[keyI] = 0;}
    
    if (value == NULL || strlen(value) == 0) {
       cfg_val[keyI] = 0;
@@ -158,8 +159,12 @@ void saveUserConfig(char *cfilename) {
    if(fp != NULL) {
       for(i = 0; i < KEY_COUNT; i++) {
          if(strlen(cfg_key[i]) > 0) {
-            if(cfg_stru[i] != 0 && (cfg_strd[i] == 0 || strcmp(cfg_strd[i], cfg_stru[i]) != 0)) {
+            if(cfg_stru[i] != 0 && cfg_strd[i] != 0 && strcmp(cfg_strd[i], cfg_stru[i]) != 0) {
                fprintf(fp, "%s %s\n", cfg_key[i], cfg_stru[i]);
+            } else if (cfg_stru[i] != 0 && cfg_strd[i] == 0) {
+               fprintf(fp, "%s %s\n", cfg_key[i], cfg_stru[i]);
+            } else if (cfg_stru[i] == 0 && cfg_strd[i] != 0) {
+               fprintf(fp, "%s\n", cfg_key[i]);
             }
          }
       }
@@ -220,7 +225,7 @@ int main (int argc, char* argv[]) {
    int watchdog = 0, watchdog_errors = 0;
    int box_check = 0;
    time_t last_pv_time = 0, pv_time;
-   char readbuf[60];
+   char readbuf[MAX_COMMAND_LEN];
 
    bcm_host_init();
    //
@@ -305,7 +310,7 @@ int main (int argc, char* argv[]) {
          fd = open(cfg_stru[c_control_file], O_RDONLY | O_NONBLOCK);
          if(fd < 0) error("Could not open PIPE", 1);
          fcntl(fd, F_SETFL, 0);
-         length = read(fd, readbuf, 60);
+         length = read(fd, readbuf, MAX_COMMAND_LEN -2);
          close(fd);
 
          if(length) {

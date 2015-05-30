@@ -59,14 +59,14 @@ void printLog(char *msg, ...) {
    if (fp != NULL) {
       currTime = time(NULL);
       localTime = localtime (&currTime);
-      makeFilename(&timestamp, "{%Y/%M/%D %h:%m:%s} ");
+      makeName(&timestamp, "{%Y/%M/%D %h:%m:%s} ");
       fprintf(fp, "%s",timestamp);
       vfprintf(fp, msg, args);
       if (cfg_stru[c_log_file] != 0) {
          fclose(fp);
          if (nofile) chmod(cfg_stru[c_log_file], 0777);
       }
-      if (timestamp != 0) free(timestamp);
+      free(timestamp);
    }
    va_end(args);
 }

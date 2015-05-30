@@ -70,6 +70,8 @@ extern char *filename_recording;
 extern unsigned char timelapse, running, autostart, idle, a_error, v_capturing, i_capturing, v_boxing;
 extern unsigned char buffering, buffering_toggle;
 
+#define MAX_COMMAND_LEN 256
+
 //Box file queue
 #define MAX_BOX_FILES 32
 extern char *box_files[MAX_BOX_FILES];
