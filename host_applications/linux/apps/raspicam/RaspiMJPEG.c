@@ -271,9 +271,11 @@ int main (int argc, char* argv[]) {
          printLog("MJPEG streaming, ready to receive commands\n");
          //kick off motion detection at start if required.
          if(cfg_val[c_motion_detection] && cfg_val[c_motion_external]) {
-            process_cmd("md 0", 4);
+            printLog("Autostart external motion kill any runnng motion\n");
+            if(system("killall motion") == -1) error("Could not stop external motion", 1);
             sleep(1);
-            process_cmd("md 1", 4);
+            printLog("Autostart external motion start external motion\n");
+            if(system("motion") == -1) error("Could not start external motion", 1);
          }
       } else {
          printLog("MJPEG streaming\n");
