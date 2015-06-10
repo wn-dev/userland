@@ -59,7 +59,7 @@ char *cb_buff = NULL;
 char header_bytes[29];
 int cb_len, cb_wptr, cb_wrap;
 int iframe_buff[IFRAME_BUFSIZE], iframe_buff_wpos, iframe_buff_rpos, header_wptr;
-unsigned int tl_cnt=0, mjpeg_cnt=0, image_cnt=0, image2_cnt=0, lapse_cnt=0, video_cnt=0;
+unsigned int tl_cnt=0, mjpeg_cnt=0, image_cnt=0, image2_cnt=0, lapse_cnt=0, video_cnt=0, video_stoptime=0;
 char *filename_recording = 0;
 unsigned char timelapse=0, running=1, autostart=1, idle=0, a_error=0, v_capturing=0, i_capturing=0, v_boxing=0;
 unsigned char buffering=0, buffering_toggle=0;
@@ -223,7 +223,7 @@ int main (int argc, char* argv[]) {
    monitor();
    int i, fd, length;
    int watchdog = 0, watchdog_errors = 0;
-   int box_check = 0;
+   int onesec_check = 0;
    time_t last_pv_time = 0, pv_time;
    char readbuf[MAX_COMMAND_LEN];
 
@@ -352,10 +352,16 @@ int main (int argc, char* argv[]) {
       } else {
          watchdog_errors = 0;
       }
-      if (box_check++ >= 10) {
-         //run check on background boxing every 10 ticks
-         box_check = 0;
+      if (++onesec_check >= 10) {
+         //run check on background boxing every 10 ticks and check for video timer if capturing
+         onesec_check = 0;
          check_box_files();
+         if (v_capturing && video_stoptime > 0) {
+            if (time(NULL) >= video_stoptime) {
+               printLog("Stopping video from timer\n");
+               stop_video(0);
+            }
+         }
       }
       usleep(100000);
    }

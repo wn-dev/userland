@@ -47,7 +47,7 @@ void process_cmd(char *readbuf, int length) {
    typedef enum pipe_cmd_type{ca,im,tl,px,bo,tv,an,as,at,ac,ab,sh,co,br,sa,is,vs,rl,ec,em,wb,mm,ie,ce,ro,fl,ri,ss,qu,pv,bi,ru,md,sc,rs,bu,mn,mt,mi,mb,me,mx,mf,vm,vp,wd,sy} pipe_cmd_type;
    char pipe_cmds[] = "ca,im,tl,px,bo,tv,an,as,at,ac,ab,sh,co,br,sa,is,vs,rl,ec,em,wb,mm,ie,ce,ro,fl,ri,ss,qu,pv,bi,ru,md,sc,rs,bu,mn,mt,mi,mb,me,mx,mf,vm,vp,wd,sy";
    pipe_cmd_type pipe_cmd;
-   int i;
+   int parcount;
    char pars[128][10];
    long int par0;
    char cmd[3];
@@ -70,11 +70,11 @@ void process_cmd(char *readbuf, int length) {
       //extract space separated numeric parameters
       // and make separate string parameter (strtok changes the original)
       asprintf(&parstring, "%s", par);
-      i = 0;
+      parcount = 0;
       temp = strtok(par, " ");
-      while(i<10 && temp != NULL) {
-         strcpy(pars[i], temp);
-         i++;
+      while(parcount<10 && temp != NULL) {
+         strcpy(pars[parcount], temp);
+         parcount++;
          temp = strtok(NULL, " ");
       }
       par0 = strtol(pars[0], NULL, 10);
@@ -85,6 +85,11 @@ void process_cmd(char *readbuf, int length) {
    switch(pipe_cmd) {
       case ca:
          if(par0 == 1) {
+            if (parcount > 1) {
+               long vtime = strtol(pars[1], NULL, 10);
+               video_stoptime = time(NULL) + vtime;
+               printLog("Capturing %d seconds\n", vtime);
+            }
             start_video(0);
          }  else {
             stop_video(0);

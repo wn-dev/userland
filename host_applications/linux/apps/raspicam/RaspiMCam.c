@@ -507,6 +507,7 @@ void stop_video(unsigned char stop_buf) {
   
   if(v_capturing || stop_buf) {
     v_capturing = 0;
+    video_stoptime = 0;
     if(stop_buf || !buffering) {
       status = mmal_port_parameter_set_boolean(camera->output[1], MMAL_PARAMETER_CAPTURE, 0);
       if(status != MMAL_SUCCESS) error("Could not stop capture", 1);
