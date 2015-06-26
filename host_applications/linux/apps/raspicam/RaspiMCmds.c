@@ -338,11 +338,18 @@ void process_cmd(char *readbuf, int length) {
 
 void exec_macro(char *macro, char *filename) {
    char *cmd, *macropath;
+   char async;
    
-   asprintf(&macropath,"%s/%s", cfg_stru[c_macros_path], macro);
+   if (filename != NULL && *macro == '&') {
+      asprintf(&macropath,"%s/%s", cfg_stru[c_macros_path], macro + 1);
+      async = '&';
+   } else {
+      asprintf(&macropath,"%s/%s", cfg_stru[c_macros_path], macro);
+      async = ' ';   
+   }
    if (access(macropath, F_OK ) != -1) {
       if (filename != NULL)
-         asprintf(&cmd,"%s \"%s\" &", macropath, filename);
+         asprintf(&cmd,"%s \"%s\" %c", macropath, filename, async);
       else
          asprintf(&cmd,"%s &", macropath);
       printLog("Executing macro %s\n", cmd);

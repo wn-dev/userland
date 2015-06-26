@@ -129,7 +129,7 @@ static void jpegencoder2_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_
          lapse_cnt++;
       else
          image2_cnt++;
-      exec_macro("end_img.sh", filename_image);
+      exec_macro(cfg_stru[c_end_img], filename_image);
       free(filename_image);
       i_capturing = 0;
       updateStatus();
@@ -565,11 +565,11 @@ void stop_video(unsigned char stop_buf) {
         //Queue the h264 for boxing
         add_box_file(filename_recording);
         makeBoxname(&filename_temp, filename_recording);
-        exec_macro("end_vid.sh", filename_temp);
+        exec_macro(cfg_stru[c_end_vid], filename_temp);
         free(filename_temp);
       }
       else {
-        exec_macro("end_vid.sh", filename_recording);
+        exec_macro(cfg_stru[c_end_vid], filename_recording);
       }
       free(filename_recording);
 

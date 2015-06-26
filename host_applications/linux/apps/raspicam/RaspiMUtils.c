@@ -347,7 +347,7 @@ void check_box_files() {
       // check if current MP4Box finished by seeing if h264 now deleted
       if (access(filename_temp, F_OK ) == -1) {
          printLog("Finished boxing %s from Box Queue at pos %d\n", box_files[box_tail], box_tail);
-         exec_macro("end_box.sh", box_files[box_tail]);
+         exec_macro(cfg_stru[c_end_box], box_files[box_tail]);
          free(box_files[box_tail]);
          box_tail++;
          if (box_tail >= MAX_BOX_FILES) box_tail = 0;
