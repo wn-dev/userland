@@ -66,7 +66,7 @@ extern char header_bytes[29];
 extern int cb_len, cb_wptr, cb_wrap;
 extern int iframe_buff[IFRAME_BUFSIZE], iframe_buff_wpos, iframe_buff_rpos, header_wptr;
 extern unsigned int tl_cnt, mjpeg_cnt, image_cnt, image2_cnt, lapse_cnt, video_cnt, video_stoptime;
-extern char *filename_recording;
+extern char *filename_recording, *filename_image;
 extern unsigned char timelapse, running, autostart, idle, a_error, v_capturing, i_capturing, v_boxing;
 extern unsigned char buffering, buffering_toggle;
 
@@ -159,7 +159,7 @@ void stop_all (void);
 
 //Cmds
 void process_cmd(char *readbuf, int length);
-void exec_macro(char *macro);
+void exec_macro(char *macro, char *filename);
 
 //Motion
 void setup_motiondetect();

@@ -129,6 +129,8 @@ static void jpegencoder2_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_
          lapse_cnt++;
       else
          image2_cnt++;
+      exec_macro("end_img.sh", filename_image);
+      free(filename_image);
       i_capturing = 0;
       updateStatus();
    }
@@ -384,23 +386,20 @@ void thumb_create(char *from_filename, char source) {
 
 void capt_img (void) {
 
-   char *filename_temp;
-
    currTime = time(NULL);
    localTime = localtime (&currTime);
    if(timelapse && strlen(cfg_stru[c_lapse_path]) > 10) {
-      makeFilename(&filename_temp, cfg_stru[c_lapse_path]);
+      makeFilename(&filename_image, cfg_stru[c_lapse_path]);
       if (lapse_cnt == 1) {
          //Only first capture of a lapse sequence
-         thumb_create(filename_temp, 't');
+         thumb_create(filename_image, 't');
       }
    } else {
-      makeFilename(&filename_temp, cfg_stru[c_image_path]);
-      thumb_create(filename_temp, 'i');
+      makeFilename(&filename_image, cfg_stru[c_image_path]);
+      thumb_create(filename_image, 'i');
    }
-   createMediaPath(filename_temp);
-   jpegoutput2_file = fopen(filename_temp, "wb");
-   free(filename_temp);
+   createMediaPath(filename_image);
+   jpegoutput2_file = fopen(filename_image, "wb");
    if(jpegoutput2_file != NULL){ 
       status = mmal_port_parameter_set_boolean(camera->output[2], MMAL_PARAMETER_CAPTURE, 1);
       if(status == MMAL_SUCCESS) {
@@ -408,9 +407,12 @@ void capt_img (void) {
          i_capturing = 1;
          updateStatus();
       } else {
+         fclose(jpegoutput2_file);
+         free(filename_image);
          error("Could not start image capture", 0);
       }
    } else {
+      free(filename_image);
       error("Could not open/create image-file", 0);
    }
 }
@@ -470,7 +472,6 @@ void start_video(unsigned char prepare_buf) {
         start_vectors(filename_temp);
         //restore full filename
         if (ext != NULL) *ext = '.';
-        free(filename_recording);
         h264output_file = fopen(filename_temp, "wb");
       }
       free(filename_temp);
@@ -563,8 +564,15 @@ void stop_video(unsigned char stop_buf) {
       if(cfg_val[c_MP4Box]) {
         //Queue the h264 for boxing
         add_box_file(filename_recording);
-        free(filename_recording);
+        makeBoxname(&filename_temp, filename_recording);
+        exec_macro("end_vid.sh", filename_temp);
+        free(filename_temp);
       }
+      else {
+        exec_macro("end_vid.sh", filename_recording);
+      }
+      free(filename_recording);
+
       video_cnt++;
     }
     updateStatus();

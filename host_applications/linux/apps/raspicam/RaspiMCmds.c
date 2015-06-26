@@ -315,7 +315,7 @@ void process_cmd(char *readbuf, int length) {
          key = c_vector_mode;
          break;
       case sy:
-         exec_macro(parstring);
+         exec_macro(parstring, NULL);
          break;
       default:
          printLog("Unrecognised pipe command\n");
@@ -336,16 +336,19 @@ void process_cmd(char *readbuf, int length) {
    if (parstring != 0) free(parstring);
 }
 
-void exec_macro(char *macro) {
+void exec_macro(char *macro, char *filename) {
    char *cmd, *macropath;
    
    asprintf(&macropath,"%s/%s", cfg_stru[c_macros_path], macro);
    if (access(macropath, F_OK ) != -1) {
-      asprintf(&cmd,"%s &", macropath);
+      if (filename != NULL)
+         asprintf(&cmd,"%s \"%s\" &", macropath, filename);
+      else
+         asprintf(&cmd,"%s &", macropath);
       printLog("Executing macro %s\n", cmd);
       system(cmd);
       free(cmd);
-   } else {
+   } else if (filename == NULL) {
       printLog("Can't find macro %s\n", macropath);
    }
    free(macropath);
