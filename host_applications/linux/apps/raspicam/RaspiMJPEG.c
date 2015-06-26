@@ -215,7 +215,7 @@ void monitor() {
             //wait for child process to terminate
             wait(&child_status);
             //child pid has terminated
-            sleep(1);
+            sleep(5);
       }
    }
 }
@@ -365,6 +365,7 @@ int main (int argc, char* argv[]) {
       }
       usleep(100000);
    }
+   if(system("killall motion") == -1) error("Could not stop external motion", 1);
   
    printLog("SIGINT/SIGTERM received, stopping\n");
    //
