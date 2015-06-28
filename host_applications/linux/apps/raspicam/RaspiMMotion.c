@@ -111,55 +111,110 @@ void send_motion_stop() {
 }
 
 void analyse_vectors(MMAL_BUFFER_HEADER_T *buffer) {
-   unsigned char *data = buffer->data;
    if(!cfg_val[c_motion_external]) {
       if (cfg_val[c_motion_detection]) {
-         unsigned char high_noise = 255 - cfg_val[c_motion_noise], low_noise = cfg_val[c_motion_noise];
-         int i, m, row, col;
-         i = 0;
-         m = 0;
-         motion_changes = 0;
-         for(row=0; row<motion_height; row++) {
-            for(col=0; col<motion_width; col++) {
-               if (mask_buffer == 0 || mask_buffer[m++]) {
-                  if(data[i] > low_noise && data[i] < high_noise) motion_changes++;
-                  if(data[i+1] > low_noise && data[i+1] < high_noise) motion_changes++;
-               }
-               i+=4;
-            }
+         if (cfg_val[c_motion_noise] < 1000) {
+            analyse_vectors1(buffer);
+         } else {
+            analyse_vectors2(buffer);
          }
-         switch (motion_state) {
-            case 0:
-               if (motion_changes >= cfg_val[c_motion_threshold]) {
-                  motion_frame_count++;
-                  if (motion_frame_count >= cfg_val[c_motion_startframes]) {
-                     send_motion_start();
-                     motion_frame_count = 0;
-                     motion_state = 1;
-                  }
-               } else {
-                  motion_frame_count = -2;
-               }
-               break;
-            case 1:
-               if (motion_changes < cfg_val[c_motion_threshold]) {
-                  motion_frame_count++;
-                  if (motion_frame_count >= cfg_val[c_motion_stopframes]) {
-                     send_motion_stop();
-                     motion_frame_count = 0;
-                     motion_state = 0;
-                  }
-               } else {
-                  motion_frame_count = -2;
-               }
-               break;
-         }
-         if (motion_frame_count < 0) motion_frame_count = 0;
       }
       if (cfg_val[c_motion_file])
          save_vectors(buffer);
    }
 }
+
+void analyse_vectors1(MMAL_BUFFER_HEADER_T *buffer) {
+   unsigned char *data = buffer->data;
+   unsigned char high_noise = 255 - cfg_val[c_motion_noise], low_noise = cfg_val[c_motion_noise];
+   int i, m, row, col;
+   i = 0;
+   m = 0;
+   motion_changes = 0;
+   for(row=0; row<motion_height; row++) {
+      for(col=0; col<motion_width; col++) {
+         if (mask_buffer == 0 || mask_buffer[m++]) {
+            if(data[i] > low_noise && data[i] < high_noise) motion_changes++;
+            if(data[i+1] > low_noise && data[i+1] < high_noise) motion_changes++;
+         }
+         i+=4;
+      }
+   }
+   switch (motion_state) {
+      case 0:
+         if (motion_changes >= cfg_val[c_motion_threshold]) {
+            motion_frame_count++;
+            if (motion_frame_count >= cfg_val[c_motion_startframes]) {
+               send_motion_start();
+               motion_frame_count = 0;
+               motion_state = 1;
+            }
+         } else {
+            motion_frame_count = -2;
+         }
+         break;
+      case 1:
+         if (motion_changes < cfg_val[c_motion_threshold]) {
+            motion_frame_count++;
+            if (motion_frame_count >= cfg_val[c_motion_stopframes]) {
+               send_motion_stop();
+               motion_frame_count = 0;
+               motion_state = 0;
+            }
+         } else {
+            motion_frame_count = -2;
+         }
+         break;
+   }
+   if (motion_frame_count < 0) motion_frame_count = 0;
+}
+
+void analyse_vectors2(MMAL_BUFFER_HEADER_T *buffer) {
+   unsigned char *data = buffer->data;
+   unsigned char filter = cfg_val[c_motion_noise] - 999;
+   int i, m, row, col, vectorsum;
+   i = 0;
+   m = 0;
+   vectorsum = 0;
+   for(row=0; row<motion_height; row++) {
+      for(col=0; col<motion_width; col++) {
+         if (mask_buffer == 0 || mask_buffer[m++]) {
+            if(data[i] < 128) vectorsum += data[i]; else vectorsum += (256-data[i]);
+            if(data[i+1] < 128) vectorsum += data[i+1]; else vectorsum += (256-data[i+1]);
+         }
+         i+=4;
+      }
+   }
+   motion_changes = motion_changes * (filter - 1) / filter + vectorsum / filter;
+   switch (motion_state) {
+      case 0:
+         if (motion_changes >= cfg_val[c_motion_threshold]) {
+            motion_frame_count++;
+            if (motion_frame_count >= cfg_val[c_motion_startframes]) {
+               send_motion_start();
+               motion_frame_count = 0;
+               motion_state = 1;
+            }
+         } else {
+            motion_frame_count = -2;
+         }
+         break;
+      case 1:
+         if (motion_changes < cfg_val[c_motion_threshold]) {
+            motion_frame_count++;
+            if (motion_frame_count >= cfg_val[c_motion_stopframes]) {
+               send_motion_stop();
+               motion_frame_count = 0;
+               motion_state = 0;
+            }
+         } else {
+            motion_frame_count = -2;
+         }
+         break;
+   }
+   if (motion_frame_count < 0) motion_frame_count = 0;
+}
+
 
 void start_vectors(char *vectorname) {
    char *vector_temp;
