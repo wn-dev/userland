@@ -68,3 +68,4 @@ ru 0  halt RaspiMJPEG and release camera
 ru 1  restart mjpeg-stream
 md 1  start motion detection
 md 0  stop motion detection
+cm 1  select second camera (Raspberry Pi compute module only!)
