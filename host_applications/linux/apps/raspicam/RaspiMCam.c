@@ -853,6 +853,13 @@ void start_all (int load_conf) {
    //
    status = mmal_component_create(MMAL_COMPONENT_DEFAULT_CAMERA, &camera);
    if(status != MMAL_SUCCESS) error("Could not create camera", 1);
+   MMAL_PARAMETER_INT32_T cam_num = {{MMAL_PARAMETER_CAMERA_NUM, sizeof(cam_num)}, cfg_val[c_camera_num]};
+   status = mmal_port_parameter_set(camera->control, &cam_num.hdr);
+   if(status != MMAL_SUCCESS) error("Could not select camera", 1);
+   if(!camera->output_num) {
+      status = MMAL_ENOSYS;
+      error("Camera doesn't have output ports", 1);
+   }
    status = mmal_port_enable(camera->control, camera_control_callback);
    if(status != MMAL_SUCCESS) error("Could not enable camera control port", 1);
 
