@@ -192,11 +192,14 @@ void read_config(char *cfilename, int type) {
                // split line into key, value
                *value = 0;
                value++;
-               value = trim(value);
             }
             key = getKey(line);
-            if (key < KEY_COUNT)
+            if (key < KEY_COUNT) {
+               if (key != c_annotation) {
+                  value = trim(value);
+               }
                addValue(key, value, type);
+            }
          }
       }
       if(line) free(line);

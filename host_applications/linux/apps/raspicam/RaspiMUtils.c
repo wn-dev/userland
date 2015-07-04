@@ -173,6 +173,7 @@ int findNextCount(char* folder, char* source) {
 
 
 char* trim(char*s) {
+   if (s == NULL) return NULL;
    char *end = s + strlen(s)-1;
    while(*s && isspace(*s))
       *s++ = 0;

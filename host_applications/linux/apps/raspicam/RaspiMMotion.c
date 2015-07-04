@@ -176,11 +176,13 @@ void analyse_vectors2(MMAL_BUFFER_HEADER_T *buffer) {
    i = 0;
    m = 0;
    vectorsum = 0;
-   for(row=0; row<motion_height; row++) {
-      for(col=0; col<motion_width; col++) {
+   for(row=1; row<(motion_height-1); row++) {
+      for(col=1; col<(motion_width-1); col++) {
          if (mask_buffer == 0 || mask_buffer[m++]) {
-            if(data[i] < 128) vectorsum += data[i]; else vectorsum += (256-data[i]);
-            if(data[i+1] < 128) vectorsum += data[i+1]; else vectorsum += (256-data[i+1]);
+            if( data[i-1] && data[i+1] && data[i-motion_width] && data[i+motion_width] ) {
+               if(data[i] < 128) vectorsum += data[i]; else vectorsum += (256-data[i]);
+               if(data[i+1] < 128) vectorsum += data[i+1]; else vectorsum += (256-data[i+1]);
+            }
          }
          i+=4;
       }
