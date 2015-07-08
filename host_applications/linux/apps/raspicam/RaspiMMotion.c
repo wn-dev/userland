@@ -187,6 +187,8 @@ void analyse_vectors2(MMAL_BUFFER_HEADER_T *buffer) {
          i+=4;
       }
    }
+   // clip vectorsum at twice threshold to stop large bursts triggering
+   if (vectorsum > (2 * cfg_val[c_motion_threshold])) vectorsum = 2 * cfg_val[c_motion_threshold];
    motion_changes = motion_changes * (filter - 1) / filter + vectorsum / filter;
    switch (motion_state) {
       case 0:
