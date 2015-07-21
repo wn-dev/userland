@@ -38,6 +38,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <memory.h>
 #include <semaphore.h>
+#include <pthread.h>
 #include <signal.h>
 #include <fcntl.h>
 #include <time.h>
@@ -62,6 +63,7 @@ extern MMAL_CONNECTION_T *con_cam_pre, *con_spli_res, *con_spli_h264, *con_res_j
 extern FILE *jpegoutput_file, *jpegoutput2_file, *h264output_file, *status_file, *vector_file;
 extern MMAL_POOL_T *pool_jpegencoder, *pool_jpegencoder_in, *pool_jpegencoder2, *pool_h264encoder;
 extern char *cb_buff;
+extern pthread_mutex_t v_mutex;
 extern char header_bytes[29];
 extern int cb_len, cb_wptr, cb_wrap;
 extern int iframe_buff[IFRAME_BUFSIZE], iframe_buff_wpos, iframe_buff_rpos, header_wptr;
