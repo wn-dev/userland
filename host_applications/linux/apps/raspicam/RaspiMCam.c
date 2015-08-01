@@ -498,6 +498,8 @@ void start_video(unsigned char prepare_buf) {
       if(status != MMAL_SUCCESS) {error("Could not start capture", 0); return;}
     }
     updateStatus();
+  } else {
+     printLog("Already capturing. Ignore \n");
   }
   //pthread_mutex_unlock(&v_mutex);
 }
@@ -577,6 +579,8 @@ void stop_video(unsigned char stop_buf) {
       video_cnt++;
     }
     updateStatus();
+  } else {
+     printLog("Already stopped. Ignore \n");
   }
   stop_vectors();
   //pthread_mutex_unlock(&v_mutex);
