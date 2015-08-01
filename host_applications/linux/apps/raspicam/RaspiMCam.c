@@ -150,7 +150,7 @@ static void jpegencoder2_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_
 }
 
 static void h264encoder_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)  {
-  pthread_mutex_lock(&v_mutex);
+  //pthread_mutex_lock(&v_mutex);
   int bytes_written = buffer->length;
 
   if((buffer->flags & MMAL_BUFFER_HEADER_FLAG_CODECSIDEINFO)) {
@@ -305,7 +305,7 @@ static void h264encoder_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T
     if (new_buffer) status = mmal_port_send_buffer(port, new_buffer);
     if (!new_buffer || status != MMAL_SUCCESS) error("Could not send buffers to port", 1);
   }
-  pthread_mutex_unlock(&v_mutex);
+  //pthread_mutex_unlock(&v_mutex);
 }
 
 void cam_set_annotationV3 (char *filename_temp, MMAL_BOOL_T enable) {
@@ -418,7 +418,7 @@ void capt_img (void) {
 }
 
 void start_video(unsigned char prepare_buf) {
-  pthread_mutex_lock(&v_mutex);
+  //pthread_mutex_lock(&v_mutex);
   char *filename_temp;
 
   if(!v_capturing || prepare_buf) {
@@ -499,11 +499,11 @@ void start_video(unsigned char prepare_buf) {
     }
     updateStatus();
   }
-  pthread_mutex_unlock(&v_mutex);
+  //pthread_mutex_unlock(&v_mutex);
 }
 
 void stop_video(unsigned char stop_buf) {
-  pthread_mutex_lock(&v_mutex);
+  //pthread_mutex_lock(&v_mutex);
   char *filename_temp;
   char background;
   
@@ -579,7 +579,7 @@ void stop_video(unsigned char stop_buf) {
     updateStatus();
   }
   stop_vectors();
-  pthread_mutex_unlock(&v_mutex);
+  //pthread_mutex_unlock(&v_mutex);
 }
 
 void cam_stop_buffering () {
@@ -839,7 +839,7 @@ void h264_enable_output () {
 }
 
 void start_all (int load_conf) {
-   pthread_mutex_lock(&v_mutex);
+   //pthread_mutex_lock(&v_mutex);
    MMAL_ES_FORMAT_T *format;
    int max, i;
 
@@ -1203,13 +1203,13 @@ void start_all (int load_conf) {
    cam_set_annotation();
    
    setup_motiondetect();
-   pthread_mutex_unlock(&v_mutex);
+   //pthread_mutex_unlock(&v_mutex);
 
 }
 
 
 void stop_all (void) {
-  pthread_mutex_lock(&v_mutex);
+  //pthread_mutex_lock(&v_mutex);
 
   cam_stop_buffering ();
   if(jpegencoder->output[0]->is_enabled) mmal_port_disable(jpegencoder->output[0]);
@@ -1295,6 +1295,6 @@ void stop_all (void) {
     mmal_component_destroy(splitter);
     splitter = NULL;
   }
-  pthread_mutex_unlock(&v_mutex);
+  //pthread_mutex_unlock(&v_mutex);
 }
 

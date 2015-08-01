@@ -56,7 +56,7 @@ MMAL_CONNECTION_T *con_cam_pre = 0, *con_spli_res = 0, *con_spli_h264 = 0, *con_
 FILE *jpegoutput_file = NULL, *jpegoutput2_file = NULL, *h264output_file = NULL, *status_file = NULL, *vector_file = NULL;
 MMAL_POOL_T *pool_jpegencoder = 0, *pool_jpegencoder_in = 0, *pool_jpegencoder2 = 0, *pool_h264encoder = 0;
 char *cb_buff = NULL;
-pthread_mutex_t	v_mutex;
+//pthread_mutex_t	v_mutex;
 
 char header_bytes[29];
 int cb_len, cb_wptr, cb_wrap;
