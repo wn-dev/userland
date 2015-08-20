@@ -489,6 +489,7 @@ void start_video(unsigned char prepare_buf) {
         long fileSizeCircularBuffer = copy_from_start + copy_from_end + header_wptr;
         fseek(h264output_file, fileSizeCircularBuffer, SEEK_SET);
       }
+      exec_macro(cfg_stru[c_start_vid], filename_recording);
       v_capturing = 1;
       printLog("Capturing started\n");
     }
