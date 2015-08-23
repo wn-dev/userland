@@ -345,24 +345,28 @@ void exec_macro(char *macro, char *filename) {
    char *cmd, *macropath;
    char async;
    
-   if (filename != NULL && *macro == '&') {
-      asprintf(&macropath,"%s/%s", cfg_stru[c_macros_path], macro + 1);
-      async = '&';
+   if (macro != NULL) {
+      if (filename != NULL && *macro == '&') {
+         asprintf(&macropath,"%s/%s", cfg_stru[c_macros_path], macro + 1);
+         async = '&';
+      } else {
+         asprintf(&macropath,"%s/%s", cfg_stru[c_macros_path], macro);
+         async = ' ';   
+      }
+      if (access(macropath, F_OK ) != -1) {
+         if (filename != NULL)
+            asprintf(&cmd,"%s \"%s\" %c", macropath, filename, async);
+         else
+            asprintf(&cmd,"%s &", macropath);
+         printLog("Executing macro %s\n", cmd);
+         system(cmd);
+         free(cmd);
+      } else if (filename == NULL) {
+         printLog("Can't find macro %s\n", macropath);
+      }
+      free(macropath);
    } else {
-      asprintf(&macropath,"%s/%s", cfg_stru[c_macros_path], macro);
-      async = ' ';   
+      printLog("Missing macro definition\n");
    }
-   if (access(macropath, F_OK ) != -1) {
-      if (filename != NULL)
-         asprintf(&cmd,"%s \"%s\" %c", macropath, filename, async);
-      else
-         asprintf(&cmd,"%s &", macropath);
-      printLog("Executing macro %s\n", cmd);
-      system(cmd);
-      free(cmd);
-   } else if (filename == NULL) {
-      printLog("Can't find macro %s\n", macropath);
-   }
-   free(macropath);
 }
 
