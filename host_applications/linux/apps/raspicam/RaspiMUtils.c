@@ -111,8 +111,11 @@ void updateStatus() {
 
 void error (const char *string, char fatal) {
    printLog("Error: %s\n", string);
-   if (fatal == 0)
+   if (fatal == 0) {
+      exec_macro(cfg_stru[c_error_soft], string);
       return;
+   }
+   exec_macro(cfg_stru[c_error_hard], string);
    a_error = 1;
    updateStatus();
    exit(1);
