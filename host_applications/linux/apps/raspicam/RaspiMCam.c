@@ -100,7 +100,7 @@ static void jpegencoder_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T
       new_buffer = mmal_queue_get(pool_jpegencoder->queue);
 
       if (new_buffer) status = mmal_port_send_buffer(port, new_buffer);
-      if (!new_buffer || status != MMAL_SUCCESS) error("Could not send buffers to port", 1);
+      if (!new_buffer || status != MMAL_SUCCESS) error("Could not send buffers to port, jpegencoder callback", 1);
    }
 }
 
@@ -144,7 +144,7 @@ static void jpegencoder2_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_
       new_buffer = mmal_queue_get(pool_jpegencoder2->queue);
 
       if (new_buffer) status = mmal_port_send_buffer(port, new_buffer);
-      if (!new_buffer || status != MMAL_SUCCESS) error("Could not send buffers to port", 1);
+      if (!new_buffer || status != MMAL_SUCCESS) error("Could not send buffers to port, jpegencoder callback2", 1);
    }
 
 }
@@ -303,7 +303,7 @@ static void h264encoder_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T
     new_buffer = mmal_queue_get(pool_h264encoder->queue);
 
     if (new_buffer) status = mmal_port_send_buffer(port, new_buffer);
-    if (!new_buffer || status != MMAL_SUCCESS) error("Could not send buffers to port", 1);
+    if (!new_buffer || status != MMAL_SUCCESS) error("Could not send buffers to port, h264 callback", 1);
   }
   //pthread_mutex_unlock(&v_mutex);
 }
