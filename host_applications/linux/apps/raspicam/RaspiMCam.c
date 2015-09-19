@@ -337,8 +337,8 @@ void cam_set_annotation() {
    char *filename_temp = 0;
    MMAL_BOOL_T enable;
    if(cfg_stru[c_annotation] != 0) {
-      currTime = time(NULL);
-      localTime = localtime (&currTime);
+      clock_gettime(CLOCK_REALTIME, &currTime);
+      localTime = localtime (&(currTime.tv_sec));
       makeName(&filename_temp, cfg_stru[c_annotation]);
       enable = MMAL_TRUE;
    } else {
@@ -386,8 +386,8 @@ void thumb_create(char *from_filename, char source) {
 
 void capt_img (void) {
 
-   currTime = time(NULL);
-   localTime = localtime (&currTime);
+   clock_gettime(CLOCK_REALTIME, &currTime);
+   localTime = localtime (&(currTime.tv_sec));
    if(timelapse && strlen(cfg_stru[c_lapse_path]) > 10) {
       makeFilename(&filename_image, cfg_stru[c_lapse_path]);
       if (lapse_cnt == 1) {
@@ -453,8 +453,8 @@ void start_video(unsigned char prepare_buf) {
       if(status != MMAL_SUCCESS) {error("Could not enable connection camera -> video converter", 0); return;}
     }
     if(!prepare_buf) {
-      currTime = time(NULL);
-      localTime = localtime (&currTime);
+      clock_gettime(CLOCK_REALTIME, &currTime);
+      localTime = localtime (&(currTime.tv_sec));
       makeFilename(&filename_recording, cfg_stru[c_video_path]);
       createMediaPath(filename_recording);
       if(cfg_val[c_MP4Box] != 0) {

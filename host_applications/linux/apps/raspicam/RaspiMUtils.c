@@ -57,8 +57,8 @@ void printLog(char *msg, ...) {
       fp = stdout;
    }
    if (fp != NULL) {
-      currTime = time(NULL);
-      localTime = localtime (&currTime);
+      clock_gettime(CLOCK_REALTIME, &currTime);
+      localTime = localtime (&(currTime.tv_sec));
       makeName(&timestamp, "{%Y/%M/%D %h:%m:%s} ");
       fprintf(fp, "%s",timestamp);
       vfprintf(fp, msg, args);
@@ -188,7 +188,7 @@ char* trim(char*s) {
 void makeName(char** name, char *template) {
    //Create name from template
    const int max_subs = 16;
-   char spec[13] = "%YyMDhmsvitfc";
+   char spec[14] = "%YyMDhmsuvitfc";
    char *template1;
    char p[max_subs][10];
    char *s, *e, *f;
@@ -222,11 +222,12 @@ void makeName(char** name, char *template) {
             case 5: sprintf(p[pi], "%02d", localTime->tm_hour);break;
             case 6: sprintf(p[pi], "%02d", localTime->tm_min);break;
             case 7: sprintf(p[pi], "%02d", localTime->tm_sec);break;
-            case 8: sprintf(p[pi], "%04d", video_cnt);break;
-            case 9: sprintf(p[pi], "%04d", image2_cnt);break;
-            case 10: sprintf(p[pi], "%04d", lapse_cnt);break;
-            case 11: sprintf(p[pi], "%04d", motion_frame_count);break;
-            case 12: sprintf(p[pi], "%04d", motion_changes);break;
+            case 8: sprintf(p[pi], "%03d", currTime.tv_nsec / 1000000);break;
+            case 9: sprintf(p[pi], "%04d", video_cnt);break;
+            case 10: sprintf(p[pi], "%04d", image2_cnt);break;
+            case 11: sprintf(p[pi], "%04d", lapse_cnt);break;
+            case 12: sprintf(p[pi], "%04d", motion_frame_count);break;
+            case 13: sprintf(p[pi], "%04d", motion_changes);break;
          }
          if (pi < (max_subs-1)) pi++;
          *s = 's';

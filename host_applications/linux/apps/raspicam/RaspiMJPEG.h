@@ -31,7 +31,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /**
  * \file RaspiMJPEG.h
  **/
-#define VERSION "5.2.9"
+#define VERSION "5.2.10"
  
 #include <stdio.h>
 #include <stdlib.h>
@@ -119,7 +119,7 @@ typedef enum cfgkey_type
    c_camera_num,
    } cfgkey_type; 
 
-time_t currTime;
+struct timespec currTime;
 struct tm *localTime;
 
 //Utils
