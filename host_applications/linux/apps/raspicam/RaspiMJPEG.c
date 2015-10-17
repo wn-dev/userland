@@ -91,7 +91,7 @@ char *cfg_key[] ={
    "motion_noise","motion_threshold","motion_image","motion_startframes","motion_stopframes","motion_pipe",
    "user_config","log_file","watchdog_interval","watchdog_errors","h264_buffers",
    "error_soft", "error_hard", "end_img", "start_vid", "end_vid", "end_box",
-   "camera_num",
+   "camera_num","stat_pass"
 };
 
 

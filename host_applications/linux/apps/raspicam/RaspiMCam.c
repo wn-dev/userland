@@ -401,6 +401,8 @@ void capt_img (void) {
    createMediaPath(filename_image);
    jpegoutput2_file = fopen(filename_image, "wb");
    if(jpegoutput2_file != NULL){ 
+      status = mmal_port_parameter_set_boolean(camera->control, MMAL_PARAMETER_CAPTURE_STATS_PASS, cfg_val[c_stat_pass]);
+      if(status != MMAL_SUCCESS) printLog("Could not set stat_pass\n");
       status = mmal_port_parameter_set_boolean(camera->output[2], MMAL_PARAMETER_CAPTURE, 1);
       if(status == MMAL_SUCCESS) {
          printLog("Capturing image\n");
@@ -1007,6 +1009,8 @@ void start_all (int load_conf) {
    if(status != MMAL_SUCCESS) error("Could not set image format 2", 1);
    status = mmal_port_parameter_set_uint32(jpegencoder2->output[0], MMAL_PARAMETER_JPEG_Q_FACTOR, 85);
    if(status != MMAL_SUCCESS) error("Could not set jpeg quality 2", 1);
+   status = mmal_port_parameter_set_boolean(camera->control, MMAL_PARAMETER_CAPTURE_STATS_PASS, cfg_val[c_stat_pass]);
+   if(status != MMAL_SUCCESS) printLog("Could not set stat_pass\n");
 
    status = mmal_component_enable(jpegencoder2);
    if(status != MMAL_SUCCESS) error("Could not enable image encoder 2", 1);
