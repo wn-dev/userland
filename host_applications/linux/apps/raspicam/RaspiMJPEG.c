@@ -61,7 +61,7 @@ char *cb_buff = NULL;
 char header_bytes[29];
 int cb_len, cb_wptr, cb_wrap;
 int iframe_buff[IFRAME_BUFSIZE], iframe_buff_wpos, iframe_buff_rpos, header_wptr;
-unsigned int tl_cnt=0, mjpeg_cnt=0, image_cnt=0, image2_cnt=0, lapse_cnt=0, video_cnt=0, video_stoptime=0;
+unsigned int tl_cnt=0, mjpeg_cnt=0, image_cnt=0, image2_cnt=0, lapse_cnt=0, video_cnt=0, video_stoptime=0, video_frame;
 char *filename_recording = 0, *filename_image = 0;
 unsigned char timelapse=0, running=1, autostart=1, idle=0, a_error=0, v_capturing=0, i_capturing=0, v_boxing=0;
 unsigned char buffering=0, buffering_toggle=0;

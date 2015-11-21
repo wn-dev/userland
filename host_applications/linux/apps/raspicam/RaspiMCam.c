@@ -75,6 +75,8 @@ static void jpegencoder_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T
   
    if(buffer->flags & MMAL_BUFFER_HEADER_FLAG_FRAME_END) {
       mjpeg_cnt++;
+      video_frame++;
+      if (video_frame >= cfg_val[c_video_fps]) video_frame = 0;
       if(mjpeg_cnt == cfg_val[c_divider]) {
          if(jpegoutput_file != NULL) {
             fclose(jpegoutput_file);
@@ -335,10 +337,12 @@ void cam_set_annotationV3 (char *filename_temp, MMAL_BOOL_T enable) {
 
 void cam_set_annotation() {
    char *filename_temp = 0;
+   int prev_sec = localTime->tm_sec;
    MMAL_BOOL_T enable;
    if(cfg_stru[c_annotation] != 0) {
       clock_gettime(CLOCK_REALTIME, &currTime);
       localTime = localtime (&(currTime.tv_sec));
+      if (localTime->tm_sec != prev_sec) video_frame = 0;
       makeName(&filename_temp, cfg_stru[c_annotation]);
       enable = MMAL_TRUE;
    } else {

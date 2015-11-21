@@ -1,7 +1,7 @@
 /*
 Copyright (c) 2015, Broadcom Europe Ltd
 Copyright (c) 2015, Silvan Melchior
-Copyright (c) 2015, Robert Tidey
+Copyright (c) 2015, Robert Tidey 
 Copyright (c) 2015, James Hughes
 All rights reserved.
 
@@ -188,7 +188,7 @@ char* trim(char*s) {
 void makeName(char** name, char *template) {
    //Create name from template
    const int max_subs = 16;
-   char spec[14] = "%YyMDhmsuvitfc";
+   char spec[15] = "%YyMDhmsuvitfck";
    char *template1;
    char p[max_subs][10];
    char *s, *e, *f;
@@ -228,6 +228,7 @@ void makeName(char** name, char *template) {
             case 11: sprintf(p[pi], "%04d", lapse_cnt);break;
             case 12: sprintf(p[pi], "%04d", motion_frame_count);break;
             case 13: sprintf(p[pi], "%04d", motion_changes);break;
+            case 14: sprintf(p[pi], "%02d", video_frame);break;
          }
          if (pi < (max_subs-1)) pi++;
          *s = 's';
