@@ -362,7 +362,8 @@ int main (int argc, char* argv[]) {
       if (++onesec_check >= 10) {
          //run check on background boxing every 10 ticks and check for video timer if capturing
          onesec_check = 0;
-         check_box_files();
+         // 4.9 compiler seems to want a print after the box finish to get input FIFO working again
+         if (check_box_files()) printLog("Removed item from Box Queue\n");
          if (v_capturing && video_stoptime > 0) {
             if (time(NULL) >= video_stoptime) {
                printLog("Stopping video from timer\n");

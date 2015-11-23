@@ -346,8 +346,9 @@ void add_box_file(char *boxfile) {
    }
 }
 
-void check_box_files() {
+int check_box_files() {
    char *cmd_temp = 0, *filename_temp = 0;
+   int ret = 0;
    if (v_boxing > 0) {
       makeBoxname(&filename_temp, box_files[box_tail]);
       // check if current MP4Box finished by seeing if h264 now deleted
@@ -358,19 +359,21 @@ void check_box_files() {
          box_tail++;
          if (box_tail >= MAX_BOX_FILES) box_tail = 0;
          v_boxing = 0;
+         ret = 1;
       }
       free(filename_temp);
    }
    if(v_boxing == 0 && get_box_count() > 0) {
       //start new MP4Box operation
       makeBoxname(&filename_temp, box_files[box_tail]);
-      asprintf(&cmd_temp, "(MP4Box -fps %i -add %s %s > /dev/null;rm \"%s\";) &", cfg_val[c_MP4Box_fps], filename_temp, box_files[box_tail], filename_temp);
+      asprintf(&cmd_temp, "(MP4Box -fps %i -add %s %s > /dev/null 2>&1;rm \"%s\";) &", cfg_val[c_MP4Box_fps], filename_temp, box_files[box_tail], filename_temp);
       printLog("Start boxing %s to %s Queue pos %d\n", filename_temp, box_files[box_tail], box_tail);
       system(cmd_temp);
       v_boxing = 1;
       free(cmd_temp);
       free(filename_temp);
    }
+   return ret;
 }   
 
 void send_schedulecmd(char *cmd) {

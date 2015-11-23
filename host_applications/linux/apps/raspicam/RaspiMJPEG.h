@@ -136,7 +136,7 @@ int copy_file(char *from_filename, char *to_filename);
 time_t get_mtime(const char *path);
 void makeBoxname(char** boxname, char *filename);
 void add_box_file(char *boxfile);
-void check_box_files();
+int check_box_files();
 void send_schedulecmd(char *cmd);
 
 //Camera
