@@ -87,18 +87,27 @@ void updateStatus() {
       }
       else if (v_capturing) {
          if(!cfg_val[c_motion_detection]) 
-            strcpy(status, "video");
+            if (timelapse)
+               strcpy(status, "tl_video");
+            else
+               strcpy(status, "video");
          else
-            strcpy(status, "md_video");
-      }
-      else if (timelapse) {
-         strcpy(status, "timelapse");
+            if (timelapse)
+               strcpy(status, "tl_md_video");
+            else
+               strcpy(status, "md_video");
       }
       else {
          if(!cfg_val[c_motion_detection]) 
-            strcpy(status, "ready");
+            if (timelapse)
+               strcpy(status, "timelapse");
+            else
+               strcpy(status, "ready");
          else
-            strcpy(status, "md_ready");
+            if (timelapse)
+               strcpy(status, "tl_md_ready");
+            else
+               strcpy(status, "md_ready");
       }
       
       status_file = fopen(cfg_stru[c_status_file], "w");
