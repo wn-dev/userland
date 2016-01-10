@@ -90,8 +90,8 @@ char *cfg_key[] ={
    "thumb_gen","autostart","motion_detection","motion_file","vector_preview","vector_mode", "motion_external",
    "motion_noise","motion_threshold","motion_image","motion_startframes","motion_stopframes","motion_pipe",
    "user_config","log_file","watchdog_interval","watchdog_errors","h264_buffers",
-   "error_soft", "error_hard", "end_img", "start_vid", "end_vid", "end_box",
-   "camera_num","stat_pass"
+   "error_soft", "error_hard", "end_img", "start_vid", "end_vid", "end_box", "do_cmd",
+   "camera_num","stat_pass","user_annotate"
 };
 
 
@@ -313,20 +313,21 @@ int main (int argc, char* argv[]) {
   //Send restart signal to scheduler
   send_schedulecmd("9");
    // Main forever loop
+   if(cfg_stru[c_control_file] != 0) {
+      fd = open(cfg_stru[c_control_file], O_RDONLY | O_NONBLOCK);
+      if(fd < 0) error("Could not open PIPE", 1);
+      fcntl(fd, F_SETFL, 0);
+   } else {
+      error("No PIPE defined", 1);
+   }
+   printLog("Starting command loop\n");
    while(running) {
-      if(cfg_stru[c_control_file] != 0) {
+      length = read(fd, readbuf, MAX_COMMAND_LEN -2);
 
-         fd = open(cfg_stru[c_control_file], O_RDONLY | O_NONBLOCK);
-         if(fd < 0) error("Could not open PIPE", 1);
-         fcntl(fd, F_SETFL, 0);
-         length = read(fd, readbuf, MAX_COMMAND_LEN -2);
-         close(fd);
-
-         if(length) {
-            process_cmd(readbuf, length);
-         }
-
+      if(length) {
+         process_cmd(readbuf, length);
       }
+
       if(timelapse) {
          tl_cnt++;
          if(tl_cnt >= cfg_val[c_tl_interval]) {
@@ -373,6 +374,8 @@ int main (int argc, char* argv[]) {
       }
       usleep(100000);
    }
+         
+   close(fd);
    if(system("killall motion") == -1) error("Could not stop external motion", 1);
   
    printLog("SIGINT/SIGTERM received, stopping\n");

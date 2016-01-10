@@ -253,6 +253,7 @@ void process_cmd(char *readbuf, int length) {
          }
          break;
       case md:
+         exec_macro(cfg_stru[c_do_cmd], readbuf);
          stop_all();
          if (cfg_val[c_motion_external]) {
             if(par0 == 0) {

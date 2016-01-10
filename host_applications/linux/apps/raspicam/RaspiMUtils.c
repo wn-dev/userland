@@ -196,12 +196,15 @@ char* trim(char*s) {
 
 void makeName(char** name, char *template) {
    //Create name from template
-   const int max_subs = 16;
-   char spec[15] = "%YyMDhmsuvitfck";
+   const int max_len = 100;
+   const int max_subs = 20;
+   char spec[16] = "%YyMDhmsuvitfcka";
    char *template1;
-   char p[max_subs][10];
+   char p[max_subs][max_len];
    char *s, *e, *f;
    int sp, pi;
+   int read_size;
+   FILE *fp;
    
    memset(p, 0, sizeof p);
    //get copy of template to work with
@@ -238,6 +241,16 @@ void makeName(char** name, char *template) {
             case 12: sprintf(p[pi], "%04d", motion_frame_count);break;
             case 13: sprintf(p[pi], "%04d", motion_changes);break;
             case 14: sprintf(p[pi], "%02d", video_frame);break;
+            case 15: 
+            if (c_user_annotate != NULL) {
+               fp = fopen(cfg_stru[c_user_annotate], "r");
+               if (fp != NULL) {
+                  read_size = fread(p[pi],sizeof(char),max_len - 1, fp);
+                  p[pi][read_size] = '\0';
+                  fclose(fp);
+               }
+            }
+               break;
          }
          if (pi < (max_subs-1)) pi++;
          *s = 's';
@@ -247,7 +260,7 @@ void makeName(char** name, char *template) {
       }
    } while(s != NULL);
    
-   asprintf(name, template1, p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], p[9], p[10], p[11], p[12], p[13], p[14], p[15]); 
+   asprintf(name, template1, p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], p[9], p[10], p[11], p[12], p[13], p[14], p[15], p[16], p[17], p[18], p[19]); 
    free(template1);
 }
 
