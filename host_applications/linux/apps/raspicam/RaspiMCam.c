@@ -125,16 +125,7 @@ static void jpegencoder2_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_
    if(bytes_written != buffer->length) error("Could not write all bytes jpeg2", 0);
 
    if(buffer->flags & MMAL_BUFFER_HEADER_FLAG_FRAME_END) {
-      if(jpegoutput2_file != NULL) fclose(jpegoutput2_file);
-      jpegoutput2_file = NULL;
-      if (timelapse && strlen(cfg_stru[c_lapse_path]) > 10)
-         lapse_cnt++;
-      else
-         image2_cnt++;
-      exec_macro(cfg_stru[c_end_img], filename_image);
-      free(filename_image);
-      i_capturing = 0;
-      updateStatus();
+      close_img(1);
    }
 
    mmal_buffer_header_release(buffer);
@@ -148,7 +139,23 @@ static void jpegencoder2_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_
       if (new_buffer) status = mmal_port_send_buffer(port, new_buffer);
       if (!new_buffer || status != MMAL_SUCCESS) error("Could not send buffers to port, jpegencoder callback2", 1);
    }
+}
 
+void close_img(int callback) {
+      if(jpegoutput2_file != NULL) fclose(jpegoutput2_file);
+      jpegoutput2_file = NULL;
+      if (timelapse && strlen(cfg_stru[c_lapse_path]) > 10)
+         lapse_cnt++;
+      else
+         image2_cnt++;
+      if (callback){
+         exec_macro(cfg_stru[c_end_img], filename_image);
+      } else {
+         exec_macro(cfg_stru[c_error_soft], filename_image);
+      }
+      free(filename_image);
+      i_capturing = 0;
+      updateStatus();
 }
 
 static void h264encoder_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)  {
@@ -410,7 +417,7 @@ void capt_img (void) {
       status = mmal_port_parameter_set_boolean(camera->output[2], MMAL_PARAMETER_CAPTURE, 1);
       if(status == MMAL_SUCCESS) {
          printLog("Capturing image\n");
-         i_capturing = 1;
+         i_capturing = IMAGE_TIMEOUT;
          updateStatus();
       } else {
          fclose(jpegoutput2_file);

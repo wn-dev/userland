@@ -365,6 +365,14 @@ int main (int argc, char* argv[]) {
          onesec_check = 0;
          // 4.9 compiler seems to want a print after the box finish to get input FIFO working again
          if (check_box_files()) printLog("Removed item from Box Queue\n");
+         // Check to make sure image operation not stuck (no callback)
+         if (i_capturing) {
+            i_capturing--;
+            if (i_capturing == 0) {
+               printLog("Image capture timed out %s\n", filename_image);
+               close_img(0);
+            }
+         }
          if (v_capturing && video_stoptime > 0) {
             if (time(NULL) >= video_stoptime) {
                printLog("Stopping video from timer\n");

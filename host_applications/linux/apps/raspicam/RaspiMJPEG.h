@@ -31,7 +31,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /**
  * \file RaspiMJPEG.h
  **/
-#define VERSION "5.4.1"
+#define VERSION "5.4.2" 
  
 #include <stdio.h>
 #include <stdlib.h>
@@ -73,6 +73,9 @@ extern unsigned char timelapse, running, autostart, idle, a_error, v_capturing, 
 extern unsigned char buffering, buffering_toggle;
 
 #define MAX_COMMAND_LEN 256
+
+//timeout on capturing an image in case callback never happens (units of 1 sec)
+#define IMAGE_TIMEOUT 5
 
 //Box file queue
 #define MAX_BOX_FILES 32
@@ -144,6 +147,7 @@ void cam_set_annotationV3 (char *filename_temp, MMAL_BOOL_T enable);
 void cam_set_annotation();
 void thumb_create(char *from_filename, char source);
 void capt_img (void);
+void close_img (int callback);
 void start_video(unsigned char prepare_buf);
 void stop_video(unsigned char stop_buf);
 void cam_stop_buffering ();
