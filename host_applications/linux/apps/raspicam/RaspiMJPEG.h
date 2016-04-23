@@ -31,7 +31,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /**
  * \file RaspiMJPEG.h
  **/
-#define VERSION "5.4.2" 
+#define VERSION "5.4.3" 
  
 #include <stdio.h>
 #include <stdlib.h>
@@ -74,16 +74,13 @@ extern unsigned char buffering, buffering_toggle;
 
 #define MAX_COMMAND_LEN 256
 
-//timeout on capturing an image in case callback never happens (units of 1 sec)
-#define IMAGE_TIMEOUT 5
-
 //Box file queue
 #define MAX_BOX_FILES 32
 extern char *box_files[MAX_BOX_FILES];
 extern int box_head;
 extern int box_tail;
 //hold config file data for both dflt and user config files and u long versions
-#define KEY_COUNT 87
+#define KEY_COUNT 88
 extern char *cfg_strd[KEY_COUNT + 1];
 extern char *cfg_stru[KEY_COUNT + 1];
 extern long int cfg_val[KEY_COUNT + 1];
@@ -96,6 +93,7 @@ extern int motion_frame_count;
 extern int motion_changes;
 extern int motion_state;
 extern int vector_buffer_index;
+extern int mask_valid;
 extern unsigned char *vector_buffer;
 extern unsigned char *mask_buffer_mem, *mask_buffer;
 
@@ -117,7 +115,7 @@ typedef enum cfgkey_type
    c_base_path,c_preview_path,c_image_path,c_lapse_path,c_video_path,c_status_file,c_control_file,c_media_path,c_macros_path,c_subdir_char,
    c_thumb_gen,c_autostart,c_motion_detection,c_motion_file,c_vector_preview,c_vector_mode,c_motion_external,
    c_motion_noise,c_motion_threshold,c_motion_image,c_motion_startframes,c_motion_stopframes,c_motion_pipe,
-   c_user_config,c_log_file,c_watchdog_interval,c_watchdog_errors, c_h264_buffers,
+   c_user_config,c_log_file,c_watchdog_interval,c_watchdog_errors, c_h264_buffers,c_callback_timeout,
    c_error_soft, c_error_hard, c_end_img, c_start_vid, c_end_vid, c_end_box, c_do_cmd,
    c_camera_num,c_stat_pass,c_user_annotate
    } cfgkey_type; 

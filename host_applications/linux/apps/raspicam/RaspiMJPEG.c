@@ -89,7 +89,7 @@ char *cfg_key[] ={
    "base_path","preview_path","image_path","lapse_path","video_path","status_file","control_file","media_path","macros_path","subdir_char",
    "thumb_gen","autostart","motion_detection","motion_file","vector_preview","vector_mode", "motion_external",
    "motion_noise","motion_threshold","motion_image","motion_startframes","motion_stopframes","motion_pipe",
-   "user_config","log_file","watchdog_interval","watchdog_errors","h264_buffers",
+   "user_config","log_file","watchdog_interval","watchdog_errors","h264_buffers","callback_timeout",
    "error_soft", "error_hard", "end_img", "start_vid", "end_vid", "end_box", "do_cmd",
    "camera_num","stat_pass","user_annotate"
 };
@@ -365,8 +365,8 @@ int main (int argc, char* argv[]) {
          onesec_check = 0;
          // 4.9 compiler seems to want a print after the box finish to get input FIFO working again
          if (check_box_files()) printLog("Removed item from Box Queue\n");
-         // Check to make sure image operation not stuck (no callback)
-         if (i_capturing) {
+         // Check to make sure image operation not stuck (no callback) if enabled
+         if ((cfg_val[c_callback_timeout] > 0) && i_capturing) {
             i_capturing--;
             if (i_capturing == 0) {
                printLog("Image capture timed out %s\n", filename_image);

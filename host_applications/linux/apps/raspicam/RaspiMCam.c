@@ -417,7 +417,11 @@ void capt_img (void) {
       status = mmal_port_parameter_set_boolean(camera->output[2], MMAL_PARAMETER_CAPTURE, 1);
       if(status == MMAL_SUCCESS) {
          printLog("Capturing image\n");
-         i_capturing = IMAGE_TIMEOUT;
+         if (cfg_val[c_callback_timeout] > 0) {
+            i_capturing = c_callback_timeout;
+         } else {
+            i_capturing = 1;
+         }
          updateStatus();
       } else {
          fclose(jpegoutput2_file);

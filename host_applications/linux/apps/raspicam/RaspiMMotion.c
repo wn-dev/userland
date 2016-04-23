@@ -47,14 +47,14 @@ int motion_frame_count;
 int motion_changes;
 int motion_state; // 0 search for start, 1 search for stop
 int vector_buffer_index;
+int mask_valid = 0;
 unsigned char *vector_buffer;
-unsigned char *mask_buffer_mem, *mask_buffer;
+unsigned char *mask_buffer_mem, *mask_buffer=0;
 
 // initialise variables, set up mask buffer from a pgm file if present
 void setup_motiondetect() {
    FILE *mask_file;
    int mask_size, mask_len;
-   int mask_valid = 0;
    
    if (mask_buffer != 0)
       free(mask_buffer_mem);
@@ -63,6 +63,7 @@ void setup_motiondetect() {
       free(vector_buffer);
       vector_buffer = 0;
    }
+   mask_valid = 0;
    
    if (!cfg_val[c_motion_external]) {
       mask_size = motion_width * motion_height;
@@ -133,10 +134,11 @@ void analyse_vectors1(MMAL_BUFFER_HEADER_T *buffer) {
    motion_changes = 0;
    for(row=0; row<motion_height; row++) {
       for(col=0; col<motion_width; col++) {
-         if (mask_buffer == 0 || mask_buffer[m++]) {
+         if (mask_valid == 0 || mask_buffer[m]) {
             if(data[i] > low_noise && data[i] < high_noise) motion_changes++;
             if(data[i+1] > low_noise && data[i+1] < high_noise) motion_changes++;
          }
+		 m++;
          i+=4;
       }
    }
@@ -173,17 +175,19 @@ void analyse_vectors2(MMAL_BUFFER_HEADER_T *buffer) {
    unsigned char *data = buffer->data;
    unsigned char filter = cfg_val[c_motion_noise] - 999;
    int i, m, row, col, vectorsum;
-   i = 0;
+   int buffer_width = 4 * motion_width;
+   i = buffer_width+4;
    m = 0;
    vectorsum = 0;
    for(row=1; row<(motion_height-1); row++) {
       for(col=1; col<(motion_width-1); col++) {
-         if (mask_buffer == 0 || mask_buffer[m++]) {
-            if( data[i-1] && data[i+1] && data[i-motion_width] && data[i+motion_width] ) {
+         if (mask_valid == 0 || mask_buffer[m]) {
+            if( data[i-4] && data[i+4] && data[i-buffer_width] && data[i+buffer_width] ) {
                if(data[i] < 128) vectorsum += data[i]; else vectorsum += (256-data[i]);
                if(data[i+1] < 128) vectorsum += data[i+1]; else vectorsum += (256-data[i+1]);
             }
          }
+		 m++;
          i+=4;
       }
    }
