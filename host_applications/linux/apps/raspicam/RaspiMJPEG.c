@@ -78,6 +78,7 @@ char *cfg_key[] ={
    "anno3_custom_text_colour","anno3_custom_text_Y","anno3_custom_text_U","anno3_custom_text_V","anno_text_size",
    "sharpness","contrast","brightness","saturation","iso",
    "metering_mode","video_stabilisation","exposure_compensation","exposure_mode","white_balance","image_effect",
+   "autowbgain_r","c_autowbgain_b",
    "colour_effect_en","colour_effect_u","colour_effect_v",
    "rotation","hflip","vflip",
    "sensor_region_x","sensor_region_y","sensor_region_w","sensor_region_h",

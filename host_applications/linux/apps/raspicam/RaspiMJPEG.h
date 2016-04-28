@@ -80,7 +80,7 @@ extern char *box_files[MAX_BOX_FILES];
 extern int box_head;
 extern int box_tail;
 //hold config file data for both dflt and user config files and u long versions
-#define KEY_COUNT 88
+#define KEY_COUNT 90
 extern char *cfg_strd[KEY_COUNT + 1];
 extern char *cfg_stru[KEY_COUNT + 1];
 extern long int cfg_val[KEY_COUNT + 1];
@@ -104,6 +104,7 @@ typedef enum cfgkey_type
    c_anno3_custom_text_colour,c_anno3_custom_text_Y,c_anno3_custom_text_U,c_anno3_custom_text_V,c_anno_text_size,
    c_sharpness,c_contrast,c_brightness,c_saturation,c_iso,
    c_metering_mode,c_video_stabilisation,c_exposure_compensation,c_exposure_mode,c_white_balance,c_image_effect,
+   c_autowbgain_r,c_autowbgain_b,
    c_colour_effect_en,c_colour_effect_u,c_colour_effect_v,
    c_rotation,c_hflip,c_vflip,
    c_sensor_region_x,c_sensor_region_y,c_sensor_region_w,c_sensor_region_h,
@@ -158,6 +159,7 @@ void cam_set_ie ();
 void cam_set_ce ();
 void cam_set_flip ();
 void cam_set_roi ();
+void cam_set_autowbgain ();
 void cam_set(int key);
 void h264_enable_output ();
 void start_all (int load_conf);

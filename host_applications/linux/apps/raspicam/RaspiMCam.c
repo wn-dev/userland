@@ -763,6 +763,19 @@ void cam_set_roi () {
    if(status != MMAL_SUCCESS) error("Could not set sensor area", 0);
 }
 
+void cam_set_autogain () {
+   MMAL_PARAMETER_AWB_GAINS_T param = {{MMAL_PARAMETER_CUSTOM_AWB_GAINS,sizeof(param)}, {0,0}, {0,0}};
+   unsigned int r_gain = cfg_val[c_autowbgain_r] * 655.36;
+   unsigned int b_gain = cfg_val[c_autowbgain_b] * 655.36;
+
+   param.r_gain.num = (r_gain);
+   param.b_gain.num = (b_gain);
+   param.r_gain.den = param.b_gain.den = 65536;
+   status = mmal_status_to_int(mmal_port_parameter_set(camera->control, &param.hdr));
+   if(status != MMAL_SUCCESS) error("Could not set sensor area", 0);
+}
+
+
 void cam_set(int key) {
    int control = 0;
    unsigned int id;
@@ -823,6 +836,9 @@ void cam_set(int key) {
          break;
       case c_sensor_region_x:
          cam_set_roi();
+         break;
+      case c_autowbgain_r:
+         cam_set_autowbgain();
          break;
    }
    
@@ -1227,6 +1243,7 @@ void start_all (int load_conf) {
    cam_set(c_colour_effect_en);
    cam_set(c_hflip);
    cam_set(c_sensor_region_x);
+   cam_set(c_autowbgain_r);
    cam_set_annotation();
    
    setup_motiondetect();
