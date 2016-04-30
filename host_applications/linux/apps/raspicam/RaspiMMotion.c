@@ -174,7 +174,7 @@ void analyse_vectors1(MMAL_BUFFER_HEADER_T *buffer) {
 void analyse_vectors2(MMAL_BUFFER_HEADER_T *buffer) {
    unsigned char *data = buffer->data;
    float filter = cfg_val[c_motion_noise] - 999;
-   int i, m, row, col, vectorsum;
+   int i, m, row, col, vectorsum, clip;
    int buffer_width = 4 * motion_width;
    i = buffer_width+4;
    m = 0;
@@ -191,8 +191,11 @@ void analyse_vectors2(MMAL_BUFFER_HEADER_T *buffer) {
          i+=4;
       }
    }
-   // clip vectorsum at threee threshold to stop large bursts triggering
-   if (vectorsum > (3 * cfg_val[c_motion_threshold])) vectorsum = 3 * cfg_val[c_motion_threshold];
+   // clip vectorsum at threee threshold to stop large bursts triggering limited to 200 ->5000%
+   clip = cfg_val[c_motion_clip];
+   if (clip < 2) clip = 2;
+   if (clip > 50) clip = 50;
+   if (vectorsum > (clip * cfg_val[c_motion_threshold])) vectorsum = clip * cfg_val[c_motion_threshold];
    motion_changes = (int)(motion_changes * (filter - 1) / filter + vectorsum / filter + 0.5);
    switch (motion_state) {
       case 0:

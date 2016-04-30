@@ -763,7 +763,7 @@ void cam_set_roi () {
    if(status != MMAL_SUCCESS) error("Could not set sensor area", 0);
 }
 
-void cam_set_autogain () {
+void cam_set_autowbgain () {
    MMAL_PARAMETER_AWB_GAINS_T param = {{MMAL_PARAMETER_CUSTOM_AWB_GAINS,sizeof(param)}, {0,0}, {0,0}};
    unsigned int r_gain = cfg_val[c_autowbgain_r] * 655.36;
    unsigned int b_gain = cfg_val[c_autowbgain_b] * 655.36;
@@ -771,7 +771,7 @@ void cam_set_autogain () {
    param.r_gain.num = (r_gain);
    param.b_gain.num = (b_gain);
    param.r_gain.den = param.b_gain.den = 65536;
-   status = mmal_status_to_int(mmal_port_parameter_set(camera->control, &param.hdr));
+   status = mmal_port_parameter_set(camera->control, &param.hdr);
    if(status != MMAL_SUCCESS) error("Could not set sensor area", 0);
 }
 
@@ -1109,7 +1109,11 @@ void start_all (int load_conf) {
    //
    // create image-resizer
    //
-   unsigned int height_temp = (unsigned long int)cfg_val[c_width]*cfg_val[c_video_height]/cfg_val[c_video_width];
+   unsigned int height_temp;
+   if (cfg_val[c_source] == 1)
+		height_temp = (unsigned long int)cfg_val[c_width]*cfg_val[c_image_height]/cfg_val[c_image_width];
+	else
+		height_temp = (unsigned long int)cfg_val[c_width]*cfg_val[c_video_height]/cfg_val[c_video_width];
    height_temp -= height_temp%16;
    status = mmal_component_create("vc.ril.resize", &resizer);
    if(status != MMAL_SUCCESS && status != MMAL_ENOSYS) error("Could not create image resizer", 1);
