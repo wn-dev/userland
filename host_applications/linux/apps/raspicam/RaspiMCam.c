@@ -1110,10 +1110,7 @@ void start_all (int load_conf) {
    // create image-resizer
    //
    unsigned int height_temp;
-   if (cfg_val[c_source] == 1)
-		height_temp = (unsigned long int)cfg_val[c_width]*cfg_val[c_image_height]/cfg_val[c_image_width];
-	else
-		height_temp = (unsigned long int)cfg_val[c_width]*cfg_val[c_video_height]/cfg_val[c_video_width];
+   height_temp = (unsigned long int)cfg_val[c_width]*cfg_val[c_video_height]/cfg_val[c_video_width];
    height_temp -= height_temp%16;
    status = mmal_component_create("vc.ril.resize", &resizer);
    if(status != MMAL_SUCCESS && status != MMAL_ENOSYS) error("Could not create image resizer", 1);

@@ -83,7 +83,7 @@ char *cfg_key[] ={
    "rotation","hflip","vflip",
    "sensor_region_x","sensor_region_y","sensor_region_w","sensor_region_h",
    "shutter_speed","raw_layer",
-   "width","quality","divider","source",
+   "width","quality","divider",
    "video_width","video_height","video_fps","video_bitrate","video_buffer",
    "MP4Box","MP4Box_fps","boxing_path",
    "image_width","image_height","image_quality","tl_interval",

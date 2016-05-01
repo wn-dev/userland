@@ -219,7 +219,6 @@ void process_cmd(char *readbuf, int length) {
          addUserValue(c_quality, pars[0]);
          addUserValue(c_width, pars[1]);
          addUserValue(c_divider, pars[2]);
-		 addUserValue(c_source,pars[3]);
          start_all(0);
          break;
       case bi:
