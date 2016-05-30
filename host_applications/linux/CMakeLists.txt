@@ -8,6 +8,8 @@ add_subdirectory(apps/raspicam)
 add_subdirectory(libs/sm)
 add_subdirectory(apps/smem)
 add_subdirectory(libs/debug_sym)
+add_subdirectory(apps/dtoverlay)
+add_subdirectory(apps/dtmerge)
 
 if(ALL_APPS)
  add_subdirectory(apps/vcdbg)

@@ -44,6 +44,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /// Structure to cross reference exposure strings against the MMAL parameter equivalent
 static XREF_T  exposure_map[] =
 {
+   {"off",           MMAL_PARAM_EXPOSUREMODE_OFF},
    {"auto",          MMAL_PARAM_EXPOSUREMODE_AUTO},
    {"night",         MMAL_PARAM_EXPOSUREMODE_NIGHT},
    {"nightpreview",  MMAL_PARAM_EXPOSUREMODE_NIGHTPREVIEW},
@@ -168,7 +169,7 @@ static COMMAND_LIST  cmdline_commands[] =
    {CommandSaturation,  "-saturation","sa", "Set image saturation (-100 to 100)", 1},
    {CommandISO,         "-ISO",       "ISO","Set capture ISO",  1},
    {CommandVideoStab,   "-vstab",     "vs", "Turn on video stabilisation", 0},
-   {CommandEVComp,      "-ev",        "ev", "Set EV compensation",  1},
+   {CommandEVComp,      "-ev",        "ev", "Set EV compensation - steps of 1/6 stop",  1},
    {CommandExposure,    "-exposure",  "ex", "Set exposure mode (see Notes)", 1},
    {CommandAWB,         "-awb",       "awb","Set AWB mode (see Notes)", 1},
    {CommandImageFX,     "-imxfx",     "ifx","Set image effect (see Notes)", 1},
@@ -684,14 +685,16 @@ int raspicamcontrol_parse_cmdline(RASPICAM_CAMERA_PARAMETERS *params, const char
 
    case CommandAnnotate:
    {
+      char dummy;
+      unsigned int bitmask;
       // If parameter is a number, assume its a bitmask, otherwise a string
-      if (isdigit(*arg2))
+      if (sscanf(arg2, "%u%c", &bitmask, &dummy) == 1)
       {
-         sscanf(arg2, "%u", &params->enable_annotate);
+         params->enable_annotate |= bitmask;
       }
       else
       {
-         params->enable_annotate = ANNOTATE_USER_TEXT;
+         params->enable_annotate |= ANNOTATE_USER_TEXT;
          //copy string char by char and replace "\n" with newline character
          unsigned char c;
          char const *s = arg2;
@@ -767,51 +770,51 @@ void raspicamcontrol_display_help()
 {
    int i;
 
-   fprintf(stderr, "\nImage parameter commands\n\n");
+   fprintf(stdout, "\nImage parameter commands\n\n");
 
    raspicli_display_help(cmdline_commands, cmdline_commands_size);
 
-   fprintf(stderr, "\n\nNotes\n\nExposure mode options :\n%s", exposure_map[0].mode );
+   fprintf(stdout, "\n\nNotes\n\nExposure mode options :\n%s", exposure_map[0].mode );
 
    for (i=1;i<exposure_map_size;i++)
    {
-      fprintf(stderr, ",%s", exposure_map[i].mode);
+      fprintf(stdout, ",%s", exposure_map[i].mode);
    }
 
-   fprintf(stderr, "\n\nAWB mode options :\n%s", awb_map[0].mode );
+   fprintf(stdout, "\n\nAWB mode options :\n%s", awb_map[0].mode );
 
    for (i=1;i<awb_map_size;i++)
    {
-      fprintf(stderr, ",%s", awb_map[i].mode);
+      fprintf(stdout, ",%s", awb_map[i].mode);
    }
 
-   fprintf(stderr, "\n\nImage Effect mode options :\n%s", imagefx_map[0].mode );
+   fprintf(stdout, "\n\nImage Effect mode options :\n%s", imagefx_map[0].mode );
 
    for (i=1;i<imagefx_map_size;i++)
    {
-      fprintf(stderr, ",%s", imagefx_map[i].mode);
+      fprintf(stdout, ",%s", imagefx_map[i].mode);
    }
 
-   fprintf(stderr, "\n\nMetering Mode options :\n%s", metering_mode_map[0].mode );
+   fprintf(stdout, "\n\nMetering Mode options :\n%s", metering_mode_map[0].mode );
 
    for (i=1;i<metering_mode_map_size;i++)
    {
-      fprintf(stderr, ",%s", metering_mode_map[i].mode);
+      fprintf(stdout, ",%s", metering_mode_map[i].mode);
    }
 
-   fprintf(stderr, "\n\nDynamic Range Compression (DRC) options :\n%s", drc_mode_map[0].mode );
+   fprintf(stdout, "\n\nDynamic Range Compression (DRC) options :\n%s", drc_mode_map[0].mode );
 
    for (i=1;i<drc_mode_map_size;i++)
    {
-      fprintf(stderr, ",%s", drc_mode_map[i].mode);
+      fprintf(stdout, ",%s", drc_mode_map[i].mode);
    }
 
-   fprintf(stderr, "\n");
+   fprintf(stdout, "\n");
 }
 
 
 /**
- * Dump contents of camera parameter structure to stdout for debugging/verbose logging
+ * Dump contents of camera parameter structure to stderr for debugging/verbose logging
  *
  * @param params Const pointer to parameters structure to dump
  */
@@ -835,7 +838,7 @@ void raspicamcontrol_dump_parameters(const RASPICAM_CAMERA_PARAMETERS *params)
  * ALso displays a fault if code is not success
  *
  * @param status The error code to convert
- * @return 0 if status is sucess, 1 otherwise
+ * @return 0 if status is success, 1 otherwise
  */
 int mmal_status_to_int(MMAL_STATUS_T status)
 {
@@ -1414,24 +1417,39 @@ int raspicamcontrol_set_annotate(MMAL_COMPONENT_T *camera, const int settings, c
       time_t t = time(NULL);
       struct tm tm = *localtime(&t);
       char tmp[MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V3];
+      int process_datetime = 1;
 
        annotate.enable = 1;
 
       if (settings & (ANNOTATE_APP_TEXT | ANNOTATE_USER_TEXT))
       {
-         strncpy(annotate.text, string, MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V3);
+         if ((settings & (ANNOTATE_TIME_TEXT | ANNOTATE_DATE_TEXT)) && strchr(string,'%') != NULL)
+         {  //string contains strftime parameter?
+            strftime(annotate.text, MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V3, string, &tm );
+            process_datetime = 0;
+         }else{
+            strncpy(annotate.text, string, MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V3);
+         }
          annotate.text[MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V3-1] = '\0';
       }
 
-      if (settings & ANNOTATE_TIME_TEXT)
+      if (process_datetime && (settings & ANNOTATE_TIME_TEXT))
       {
-         strftime(tmp, 32, "%X ", &tm );
+         if(strlen(annotate.text)){
+            strftime(tmp, 32, " %X", &tm );   
+         }else{
+            strftime(tmp, 32, "%X", &tm );
+         }
          strncat(annotate.text, tmp, MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V3 - strlen(annotate.text) - 1);
       }
 
-      if (settings & ANNOTATE_DATE_TEXT)
+      if (process_datetime && (settings & ANNOTATE_DATE_TEXT))
       {
-         strftime(tmp, 32, "%x", &tm );
+         if(strlen(annotate.text)){
+            strftime(tmp, 32, " %x", &tm );   
+         }else{
+            strftime(tmp, 32, "%x", &tm );
+         }
          strncat(annotate.text, tmp, MMAL_CAMERA_ANNOTATE_MAX_TEXT_LEN_V3 - strlen(annotate.text) - 1);
       }
 
