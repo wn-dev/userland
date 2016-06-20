@@ -1255,6 +1255,12 @@ void start_all (int load_conf) {
 
 void stop_all (void) {
   //pthread_mutex_lock(&v_mutex);
+  
+  //Make sure any current recording is terminated before actioning this
+  if(v_capturing) {
+    stop_video(0);
+  }
+
 
   cam_stop_buffering ();
   if(jpegencoder->output[0]->is_enabled) mmal_port_disable(jpegencoder->output[0]);
