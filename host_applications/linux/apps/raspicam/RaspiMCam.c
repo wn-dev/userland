@@ -409,6 +409,7 @@ void capt_img (void) {
       makeFilename(&filename_image, cfg_stru[c_image_path]);
       thumb_create(filename_image, 'i');
    }
+   exec_macro(cfg_stru[c_start_img], filename_image);
    createMediaPath(filename_image);
    jpegoutput2_file = fopen(filename_image, "wb");
    if(jpegoutput2_file != NULL){ 

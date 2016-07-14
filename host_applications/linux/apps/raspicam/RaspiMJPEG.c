@@ -56,6 +56,10 @@ MMAL_CONNECTION_T *con_cam_pre = 0, *con_spli_res = 0, *con_spli_h264 = 0, *con_
 FILE *jpegoutput_file = NULL, *jpegoutput2_file = NULL, *h264output_file = NULL, *status_file = NULL, *vector_file = NULL;
 MMAL_POOL_T *pool_jpegencoder = 0, *pool_jpegencoder_in = 0, *pool_jpegencoder2 = 0, *pool_h264encoder = 0;
 char *cb_buff = NULL;
+
+char readbuf[FIFO_MAX][2 * MAX_COMMAND_LEN];
+int fd[FIFO_MAX], readi[FIFO_MAX];
+
 //pthread_mutex_t	v_mutex;
 
 char header_bytes[29];
@@ -91,7 +95,7 @@ char *cfg_key[] ={
    "thumb_gen","autostart","motion_detection","motion_file","vector_preview","vector_mode", "motion_external",
    "motion_noise","motion_threshold","motion_image","motion_startframes","motion_stopframes","motion_pipe","motion_clip",
    "user_config","log_file","watchdog_interval","watchdog_errors","h264_buffers","callback_timeout",
-   "error_soft", "error_hard", "end_img", "start_vid", "end_vid", "end_box", "do_cmd",
+   "error_soft", "error_hard", "start_img", "end_img", "start_vid", "end_vid", "end_box", "do_cmd",
    "camera_num","stat_pass","user_annotate"
 };
 
@@ -209,6 +213,33 @@ void read_config(char *cfilename, int type) {
    }   
 }
 
+void checkPipe(int pipe) {
+   char *lf;
+   int length, hPipe;
+   hPipe = fd[pipe];
+   if(hPipe >= 0) {
+	  length = read(hPipe, readbuf[pipe] + readi[pipe], MAX_COMMAND_LEN - 2);
+	  if (length > 0) readi[pipe] +=length;
+
+	  if(readi[pipe] != 0) {
+		lf = strchr(readbuf[pipe], 10);
+		if (lf != NULL) {
+		  *lf = 0;
+		  length = lf - readbuf[pipe];
+		  readi[pipe] -= length + 1;
+		  process_cmd(readbuf[pipe], length);
+		  length = readbuf[pipe] + 2 * MAX_COMMAND_LEN - 1 - lf;
+		  strncpy(readbuf[pipe], lf + 1, length);
+		} else {
+		  if (length == 0) {
+			process_cmd(readbuf[pipe], readi[pipe]);
+			readi[pipe] = 0;			
+		  }
+		}
+	  }
+   }
+}
+
 void monitor() {
    while(1) {
       int pid = fork();
@@ -229,11 +260,11 @@ void monitor() {
 }
 int main (int argc, char* argv[]) {
    monitor();
-   int i, fd, length;
+   int i, length;
    int watchdog = 0, watchdog_errors = 0;
    int onesec_check = 0;
    time_t last_pv_time = 0, pv_time;
-   char readbuf[MAX_COMMAND_LEN];
+   char fdName[FIFO_MAX][128];
 
    bcm_host_init();
    //
@@ -302,32 +333,49 @@ int main (int argc, char* argv[]) {
    sigaction(SIGTERM, &action, NULL);
    sigaction(SIGINT, &action, NULL);
    
-   //Clear out anything in FIFO first
-   do {
-      fd = open(cfg_stru[c_control_file], O_RDONLY | O_NONBLOCK);
-      if(fd < 0) error("Could not open PIPE", 1);
-      fcntl(fd, F_SETFL, 0);
-      length = read(fd, readbuf, 60);
-      close(fd);
-   } while (length != 0); 
-  
-  //Send restart signal to scheduler
-  send_schedulecmd("9");
-   // Main forever loop
-   if(cfg_stru[c_control_file] != 0) {
-      fd = open(cfg_stru[c_control_file], O_RDONLY | O_NONBLOCK);
-      if(fd < 0) error("Could not open PIPE", 1);
-      fcntl(fd, F_SETFL, 0);
-   } else {
-      error("No PIPE defined", 1);
+   //Set up FIFO names
+   if(cfg_stru[c_control_file] == 0) {
+     error("No PIPE defined", 1);
    }
+   for(i=0;i < FIFO_MAX; i++) {
+	 if (i==0) {
+	   sprintf(fdName[i],"%s",cfg_stru[c_control_file]);
+	 } else {
+	   sprintf(fdName[i],"%s%d",cfg_stru[c_control_file],i+10);
+	 }
+   }
+   //Clear out anything in FIFO(s) first
+   for(i=0;i < FIFO_MAX; i++) {
+     do {
+       fd[i] = open(fdName[i], O_RDONLY | O_NONBLOCK);
+       if(fd[i] >= 0) {
+         fcntl(fd[i], F_SETFL, 0);
+         length = read(fd[i], readbuf[0], 60);
+         close(fd[i]);
+	   } else {
+		 if(i==0)
+		   error("Could not open main PIPE", 1);
+	   }
+     } while (fd[i] >=0 && length != 0); 
+   }
+  
+   //Send restart signal to scheduler
+   send_schedulecmd("9");
+  
+   // Main forever loop
+   for(i=0;i < FIFO_MAX; i++) {
+     fd[i] = open(fdName[i], O_RDONLY | O_NONBLOCK);
+     if(fd[i] >= 0) {
+	   printLog("Opening FIFO %i %s %i\n", i, fdName[i], fd[i]);
+	   fcntl(fd[i], F_SETFL, 0); 
+	 } 
+   }
+   
    printLog("Starting command loop\n");
    while(running) {
-      length = read(fd, readbuf, MAX_COMMAND_LEN -2);
-
-      if(length) {
-         process_cmd(readbuf, length);
-      }
+      for(i=0;i < FIFO_MAX; i++) {
+		  checkPipe(i);
+	  }
 
       if(timelapse) {
          tl_cnt++;
