@@ -181,6 +181,7 @@ void send_motionend();
 void analyse_vectors(MMAL_BUFFER_HEADER_T *buffer);
 void analyse_vectors1(MMAL_BUFFER_HEADER_T *buffer);
 void analyse_vectors2(MMAL_BUFFER_HEADER_T *buffer);
+void reset_motion_state();
 void start_vectors(char *vectorname);
 void stop_vectors();
 void save_vectors(MMAL_BUFFER_HEADER_T *buffer);

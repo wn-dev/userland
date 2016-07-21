@@ -93,6 +93,7 @@ void process_cmd(char *readbuf, int length) {
             start_video(0);
          }  else {
             stop_video(0);
+			reset_motion_state();
          }
          break;
       case im:
@@ -108,6 +109,7 @@ void process_cmd(char *readbuf, int length) {
          else {
             image2_cnt++;
             timelapse = 0;
+			reset_motion_state();
             updateStatus();
             printLog("Timelapse stopped\n");
          }

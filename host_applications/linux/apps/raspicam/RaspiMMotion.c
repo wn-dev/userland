@@ -226,6 +226,13 @@ void analyse_vectors2(MMAL_BUFFER_HEADER_T *buffer) {
    if (motion_frame_count < 0) motion_frame_count = 0;
 }
 
+void reset_motion_state() {
+	if(motion_state > 0) {
+	  motion_state = 0;
+	  motion_frame_count = 0;
+      printLog("Reset motion state\n");
+	}
+}
 
 void start_vectors(char *vectorname) {
    char *vector_temp;
