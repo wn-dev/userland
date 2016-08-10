@@ -50,7 +50,7 @@ void printLog(char *msg, ...) {
    FILE *fp;
    vfprintf(stdout, msg, args);
 
-   if (cfg_stru[c_log_file] != 0) {
+   if (cfg_stru[c_log_file] != 0 && cfg_val[c_log_size] != 0) {
       nofile = (access(cfg_stru[c_log_file], F_OK ) == -1 );
       fp = fopen(cfg_stru[c_log_file], "a");
    } else {
