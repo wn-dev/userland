@@ -56,7 +56,7 @@ void setup_motiondetect() {
    FILE *mask_file;
    int mask_size, mask_len;
    
-   if (mask_buffer != 0)
+   if (mask_buffer != 0 && mask_buffer_mem != 0)
       free(mask_buffer_mem);
  
    if (vector_buffer != 0) {
@@ -77,28 +77,32 @@ void setup_motiondetect() {
       
       if (cfg_stru[c_motion_image] != 0) {
          mask_file = fopen(cfg_stru[c_motion_image], "r");
-         mask_buffer_mem = (unsigned char *)malloc(mask_size + 256);
-         mask_len = fread(mask_buffer_mem, sizeof *mask_buffer_mem, mask_size + 256, mask_file);
-         fclose(mask_file);
-         //Check for size and header
-         if ((mask_len > mask_size + 10) && (*mask_buffer_mem == 'P') && (*(mask_buffer_mem + 1) == '5')) {
-            //search for mask size string, data should be 1 byte after this
-            mask_buffer = strstr(mask_buffer_mem, "255");
-            if (mask_buffer != NULL) {
-               mask_buffer +=3;
-               //check size from this point
-               if ((mask_buffer_mem + mask_len - mask_buffer) >= mask_size) {
-                  mask_valid = 1;
-               }
-            }
-         }
-         if (!mask_valid) {
-            free(mask_buffer_mem);
-            mask_buffer = 0;
-            error("invalid motion mask", 0);
-         } else {
-            printLog("Motion mask %s loaded\n", cfg_stru[c_motion_image]);
-         }
+		 if (mask_file != NULL) {
+			 mask_buffer_mem = (unsigned char *)malloc(mask_size + 256);
+			 mask_len = fread(mask_buffer_mem, sizeof *mask_buffer_mem, mask_size + 256, mask_file);
+			 fclose(mask_file);
+			 //Check for size and header
+			 if ((mask_len > mask_size + 10) && (*mask_buffer_mem == 'P') && (*(mask_buffer_mem + 1) == '5')) {
+				//search for mask size string, data should be 1 byte after this
+				mask_buffer = strstr(mask_buffer_mem, "255");
+				if (mask_buffer != NULL) {
+				   mask_buffer +=3;
+				   //check size from this point
+				   if ((mask_buffer_mem + mask_len - mask_buffer) >= mask_size) {
+					  mask_valid = 1;
+				   }
+				}
+			 }
+			 if (!mask_valid) {
+				free(mask_buffer_mem);
+				mask_buffer = 0;
+				error("invalid motion mask", 0);
+			 } else {
+				printLog("Motion mask %s loaded\n", cfg_stru[c_motion_image]);
+			 }
+		 } else {
+			printLog("Can't open mask_image %s. Full path needed.\n", cfg_stru[c_motion_image]); 
+		 }
       }
    }
 }
