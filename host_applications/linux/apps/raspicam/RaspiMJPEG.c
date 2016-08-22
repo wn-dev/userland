@@ -305,25 +305,6 @@ int main (int argc, char* argv[]) {
    //
    // run
    //
-   if(cfg_val[c_autostart]) {
-      if(cfg_stru[c_control_file] != 0){
-         printLog("MJPEG streaming, ready to receive commands\n");
-         //kick off motion detection at start if required.
-         if(cfg_val[c_motion_detection] && cfg_val[c_motion_external]) {
-            printLog("Autostart external motion kill any runnng motion\n");
-            if(system("killall motion") == -1) error("Could not stop external motion", 1);
-            sleep(1);
-            printLog("Autostart external motion start external motion\n");
-            if(system("motion") == -1) error("Could not start external motion", 1);
-         }
-      } else {
-         printLog("MJPEG streaming\n");
-      }
-   }
-   else {
-      if(cfg_stru[c_control_file] != 0) printLog("MJPEG idle, ready to receive commands\n");
-      else printLog("MJPEG idle\n");
-   }
 
    updateStatus();
  
@@ -344,6 +325,7 @@ int main (int argc, char* argv[]) {
 	   sprintf(fdName[i],"%s%d",cfg_stru[c_control_file],i+10);
 	 }
    }
+   
    //Clear out anything in FIFO(s) first
    for(i=0;i < FIFO_MAX; i++) {
      do {
@@ -359,9 +341,6 @@ int main (int argc, char* argv[]) {
      } while (fd[i] >=0 && length != 0); 
    }
   
-   //Send restart signal to scheduler
-   send_schedulecmd("9");
-  
    // Main forever loop
    for(i=0;i < FIFO_MAX; i++) {
      fd[i] = open(fdName[i], O_RDONLY | O_NONBLOCK);
@@ -370,6 +349,26 @@ int main (int argc, char* argv[]) {
 	   fcntl(fd[i], F_SETFL, 0); 
 	 } 
    }
+   
+   if(cfg_val[c_autostart]) {
+	 printLog("MJPEG streaming, ready to receive commands\n");
+	 //kick off motion detection at start if required.
+	 if(cfg_val[c_motion_detection] && cfg_val[c_motion_external]) {
+		printLog("Autostart external motion kill any runnng motion\n");
+		if(system("killall motion") == -1) error("Could not stop external motion", 1);
+		sleep(1);
+		printLog("Autostart external motion start external motion\n");
+		if(system("motion") == -1) error("Could not start external motion", 1);
+	 }
+   }
+   else {
+      if(cfg_stru[c_control_file] != 0) printLog("MJPEG idle, ready to receive commands\n");
+      else printLog("MJPEG idle\n");
+   }
+   
+   updateStatus();
+   //Send restart signal to scheduler
+   send_schedulecmd("9");
    
    printLog("Starting command loop\n");
    while(running) {
