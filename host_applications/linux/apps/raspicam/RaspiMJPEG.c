@@ -355,7 +355,7 @@ int main (int argc, char* argv[]) {
 	 //kick off motion detection at start if required.
 	 if(cfg_val[c_motion_detection] && cfg_val[c_motion_external]) {
 		printLog("Autostart external motion kill any runnng motion\n");
-		if(system("killall motion") == -1) error("Could not stop external motion", 1);
+		if(system("killall motion 2> /dev/null") == -1) error("Could not stop external motion", 1);
 		sleep(1);
 		printLog("Autostart external motion start external motion\n");
 		if(system("motion") == -1) error("Could not start external motion", 1);
@@ -432,7 +432,7 @@ int main (int argc, char* argv[]) {
    }
          
    close(fd);
-   if(system("killall motion") == -1) error("Could not stop external motion", 1);
+   if(system("killall motion 2> /dev/null") == -1) error("Could not stop external motion", 1);
   
    printLog("SIGINT/SIGTERM received, stopping\n");
    //

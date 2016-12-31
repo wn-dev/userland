@@ -253,7 +253,7 @@ void process_cmd(char *readbuf, int length) {
          key = c_motion_external;
          //If switching to internal with motion detection on then try to kill external motion
          if (cfg_val[c_motion_detection] != 0 && !par0) {
-            if(system("killall motion") == -1) error("Could not stop external motion", 1);
+            if(system("killall motion 2> /dev/null") == -1) error("Could not stop external motion", 1);
             printLog("External motion detection stopped\n");
          }
          break;
@@ -262,7 +262,7 @@ void process_cmd(char *readbuf, int length) {
          stop_all();
          if (cfg_val[c_motion_external]) {
             if(par0 == 0) {
-               if(system("killall motion") == -1) error("Could not stop external motion", 1);
+               if(system("killall motion 2> /dev/null") == -1) error("Could not stop external motion", 1);
                printLog("External motion detection stopped\n");
             }
             else {
