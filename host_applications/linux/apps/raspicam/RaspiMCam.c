@@ -363,6 +363,7 @@ void thumb_create(char *from_filename, char source) {
    //make a thumbnail with source+count.th.jpg appended
    char *filename = 0;
    char *thumb_name = 0;
+   char *thumb_count = 0;
    char *f = 0, *s = 0, *t = 0;
    unsigned int xcount=0;
    
@@ -387,9 +388,11 @@ void thumb_create(char *from_filename, char source) {
             }
          } while (t != NULL);
          //generate thumbnail name
-         asprintf(&thumb_name, "%s/%s.%c%04d.th.jpg", cfg_stru[c_media_path], f, source, xcount);
+         asprintf(&thumb_count, cfg_stru[c_count_format], xcount);
+         asprintf(&thumb_name, "%s/%s.%c%s.th.jpg", cfg_stru[c_media_path], f, source, thumb_count);
          copy_file(cfg_stru[c_preview_path], thumb_name);
          free(thumb_name);
+         free(thumb_count);
       }
       free(filename);
    }

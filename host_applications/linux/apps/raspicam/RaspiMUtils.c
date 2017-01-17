@@ -235,9 +235,9 @@ void makeName(char** name, char *template) {
             case 6: sprintf(p[pi], "%02d", localTime->tm_min);break;
             case 7: sprintf(p[pi], "%02d", localTime->tm_sec);break;
             case 8: sprintf(p[pi], "%03d", currTime.tv_nsec / 1000000);break;
-            case 9: sprintf(p[pi], "%04d", video_cnt);break;
-            case 10: sprintf(p[pi], "%04d", image2_cnt);break;
-            case 11: sprintf(p[pi], "%04d", lapse_cnt);break;
+            case 9: sprintf(p[pi], cfg_stru[c_count_format], video_cnt);break;
+            case 10: sprintf(p[pi], cfg_stru[c_count_format], image2_cnt);break;
+            case 11: sprintf(p[pi], cfg_stru[c_count_format], lapse_cnt);break;
             case 12: sprintf(p[pi], "%04d", motion_frame_count);break;
             case 13: sprintf(p[pi], "%04d", motion_changes);break;
             case 14: sprintf(p[pi], "%02d", video_frame);break;
