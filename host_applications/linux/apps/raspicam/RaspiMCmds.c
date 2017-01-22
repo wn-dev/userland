@@ -360,6 +360,7 @@ void process_cmd(char *readbuf, int length) {
 
 void exec_macro(char *macro, char *filename) {
    char *cmd, *macropath;
+   char *s;
    char async;
    
    if (macro != NULL) {
@@ -370,7 +371,10 @@ void exec_macro(char *macro, char *filename) {
          asprintf(&macropath,"%s/%s", cfg_stru[c_macros_path], macro);
          async = ' ';   
       }
+	  s = strchr(macropath, ' ');
+	  if (s != NULL) *s = 0;
       if (access(macropath, F_OK ) != -1) {
+		 if (s != NULL) *s = ' ';
          if (filename != NULL)
             asprintf(&cmd,"%s \"%s\" %c", macropath, filename, async);
          else
@@ -381,6 +385,7 @@ void exec_macro(char *macro, char *filename) {
       } else if (filename == NULL) {
          printLog("Can't find macro %s\n", macropath);
       }
+      if (s != NULL) *s = ' ';
       free(macropath);
    } else {
       printLog("Missing macro definition\n");
