@@ -1,6 +1,8 @@
 /*
-Copyright (c) 2012, Broadcom Europe Ltd
+Copyright (c) 2013, Broadcom Europe Ltd
+Copyright (c) 2016, Tim Gover
 All rights reserved.
+
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -24,23 +26,12 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-#include <assert.h>
-#include <stdio.h>
-#include <stdarg.h>
-#include <stdlib.h>
 
-#include "interface/vcos/vcos.h"
-int vc_hostreq_set_notify (int reason, int (*f)())
-{
-  vcos_log("vc_hostreq_set_notify %d:%p\n", reason, (void *)f);
-  return 0;
-}
+#ifndef VCSM_SQUARE_H
+#define VCSM_SQUARE_H
 
-int vmcs_framework_create_hdmi_buttons(void)
-{
-  vcos_log("vmcs_framework_create_hdmi_buttons\n");
-  return 0;
-}
+#include "RaspiTex.h"
 
+int vcsm_square_open(RASPITEX_STATE *state);
 
-
+#endif /* VCSM_SQUARE_H */

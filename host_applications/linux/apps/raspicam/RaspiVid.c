@@ -38,17 +38,23 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * 3 components are created; camera, preview and video encoder.
  * Camera component has three ports, preview, video and stills.
- * This program connects preview and stills to the preview and video
+ * This program connects preview and video to the preview and video
  * encoder. Using mmal we don't need to worry about buffers between these
  * components, but we do need to handle buffers from the encoder, which
  * are simply written straight to the file in the requisite buffer callback.
+ *
+ * If raw option is selected, a video splitter component is connected between
+ * camera and preview. This allows us to set up callback for raw camera data
+ * (in YUV420 or RGB format) which might be useful for further image processing.
  *
  * We use the RaspiCamControl code to handle the specific camera settings.
  * We use the RaspiPreview code to handle the (generic) preview window
  */
 
 // We use some GNU extensions (basename)
-#define _GNU_SOURCE
+#ifndef _GNU_SOURCE
+   #define _GNU_SOURCE
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -80,10 +86,16 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <semaphore.h>
 
+#include <stdbool.h>
+
 // Standard port setting for the camera component
 #define MMAL_CAMERA_PREVIEW_PORT 0
 #define MMAL_CAMERA_VIDEO_PORT 1
 #define MMAL_CAMERA_CAPTURE_PORT 2
+
+// Port configuration for the splitter component
+#define SPLITTER_OUTPUT_PORT 0
+#define SPLITTER_PREVIEW_PORT 1
 
 // Video format information
 // 0 implies variable
@@ -94,7 +106,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define VIDEO_OUTPUT_BUFFERS_NUM 3
 
 // Max bitrate we allow for recording
-const int MAX_BITRATE = 25000000; // 25Mbits/s
+const int MAX_BITRATE_MJPEG = 25000000; // 25Mbits/s
+const int MAX_BITRATE_LEVEL4 = 25000000; // 25Mbits/s
+const int MAX_BITRATE_LEVEL42 = 62500000; // 62.5Mbits/s
 
 /// Interval at which we check for an failure abort during capture
 const int ABORT_INTERVAL = 100; // ms
@@ -139,9 +153,18 @@ typedef struct
    char  header_bytes[29];
    int  header_wptr;
    FILE *imv_file_handle;               /// File handle to write inline motion vectors to.
+   FILE *raw_file_handle;               /// File handle to write raw data to.
    int  flush_buffers;
    FILE *pts_file_handle;               /// File timestamps
 } PORT_USERDATA;
+
+/** Possible raw output formats
+ */
+typedef enum {
+   RAW_OUTPUT_FMT_YUV = 1,
+   RAW_OUTPUT_FMT_RGB,
+   RAW_OUTPUT_FMT_GRAY,
+} RAW_OUTPUT_FMT;
 
 /** Structure containing all state information for the current run
  */
@@ -163,6 +186,7 @@ struct RASPIVID_STATE_S
    int immutableInput;                 /// Flag to specify whether encoder works in place or creates a new buffer. Result is preview can display either
                                        /// the camera output or the encoder output (with compression artifacts)
    int profile;                        /// H264 profile to use for encoding
+   int level;                          /// H264 level to use for encoding
    int waitMethod;                     /// Method for switching between pause and capture
 
    int onTime;                         /// In timed cycle mode, the amount of time the capture is on per cycle
@@ -178,10 +202,13 @@ struct RASPIVID_STATE_S
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
 
    MMAL_COMPONENT_T *camera_component;    /// Pointer to the camera component
+   MMAL_COMPONENT_T *splitter_component;  /// Pointer to the splitter component
    MMAL_COMPONENT_T *encoder_component;   /// Pointer to the encoder component
-   MMAL_CONNECTION_T *preview_connection; /// Pointer to the connection from camera to preview
+   MMAL_CONNECTION_T *preview_connection; /// Pointer to the connection from camera or splitter to preview
+   MMAL_CONNECTION_T *splitter_connection;/// Pointer to the connection from camera to splitter
    MMAL_CONNECTION_T *encoder_connection; /// Pointer to the connection from camera to encoder
 
+   MMAL_POOL_T *splitter_pool; /// Pointer to the pool of buffers used by splitter output port 0
    MMAL_POOL_T *encoder_pool; /// Pointer to the pool of buffers used by encoder output port
 
    PORT_USERDATA callback_data;        /// Used to move data to the encoder callback
@@ -191,15 +218,20 @@ struct RASPIVID_STATE_S
 
    int inlineMotionVectors;             /// Encoder outputs inline Motion Vectors
    char *imv_filename;                  /// filename of inline Motion Vectors output
+   int raw_output;                      /// Output raw video from camera as well
+   RAW_OUTPUT_FMT raw_output_fmt;       /// The raw video format
+   char *raw_filename;                  /// Filename for raw video output
    int cameraNum;                       /// Camera number
    int settings;                        /// Request settings from the camera
    int sensor_mode;			            /// Sensor mode. 0=auto. Check docs/forum for modes selected by other values.
    int intra_refresh_type;              /// What intra refresh type to use. -1 to not set.
    int frame;
-   char *pts_file;
+   char *pts_filename;
    int save_pts;
    int64_t starttime;
    int64_t lasttime;
+
+   bool netListen;
 };
 
 
@@ -213,6 +245,17 @@ static XREF_T  profile_map[] =
 };
 
 static int profile_map_size = sizeof(profile_map) / sizeof(profile_map[0]);
+
+/// Structure to cross reference H264 level strings against the MMAL parameter equivalent
+static XREF_T  level_map[] =
+{
+   {"4",           MMAL_VIDEO_LEVEL_H264_4},
+   {"4.1",         MMAL_VIDEO_LEVEL_H264_41},
+   {"4.2",         MMAL_VIDEO_LEVEL_H264_42},
+};
+
+static int level_map_size = sizeof(level_map) / sizeof(level_map[0]);
+
 
 static XREF_T  initial_map[] =
 {
@@ -233,6 +276,14 @@ static XREF_T  intra_refresh_map[] =
 
 static int intra_refresh_map_size = sizeof(intra_refresh_map) / sizeof(intra_refresh_map[0]);
 
+static XREF_T  raw_output_fmt_map[] =
+{
+   {"yuv",  RAW_OUTPUT_FMT_YUV},
+   {"rgb",  RAW_OUTPUT_FMT_RGB},
+   {"gray", RAW_OUTPUT_FMT_GRAY},
+};
+
+static int raw_output_fmt_map_size = sizeof(raw_output_fmt_map) / sizeof(raw_output_fmt_map[0]);
 
 static void display_valid_parameters(char *app_name);
 
@@ -268,6 +319,10 @@ static void display_valid_parameters(char *app_name);
 #define CommandFlush        28
 #define CommandSavePTS      29
 #define CommandCodec        30
+#define CommandLevel        31
+#define CommandRaw          32
+#define CommandRawFormat    33
+#define CommandNetListen    34
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -275,7 +330,10 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandWidth,         "-width",      "w",  "Set image width <size>. Default 1920", 1 },
    { CommandHeight,        "-height",     "h",  "Set image height <size>. Default 1080", 1 },
    { CommandBitrate,       "-bitrate",    "b",  "Set bitrate. Use bits per second (e.g. 10MBits/s would be -b 10000000)", 1 },
-   { CommandOutput,        "-output",     "o",  "Output filename <filename> (to write to stdout, use '-o -')", 1 },
+   { CommandOutput,        "-output",     "o",  "Output filename <filename> (to write to stdout, use '-o -').\n"
+         "\t\t  Connect to a remote IPv4 host (e.g. tcp://192.168.1.2:1234, udp://192.168.1.2:1234)\n"
+         "\t\t  To listen on a TCP port (IPv4) and wait for an incoming connection use -l\n"
+         "\t\t  (e.g. raspvid -l -o tcp://0.0.0.0:3333 -> bind to all network interfaces, raspvid -l -o tcp://192.168.1.1:3333 -> bind to a certain local IPv4)", 1 },
    { CommandVerbose,       "-verbose",    "v",  "Output verbose information during run", 0 },
    { CommandTimeout,       "-timeout",    "t",  "Time (in ms) to capture for. If not specified, set to 5s. Zero to disable", 1 },
    { CommandDemoMode,      "-demo",       "d",  "Run a demo mode (cycle through range of camera options, no capture)", 1},
@@ -302,6 +360,10 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandFlush,         "-flush",      "fl",  "Flush buffers in order to decrease latency", 0 },
    { CommandSavePTS,       "-save-pts",   "pts","Save Timestamps to file for mkvmerge", 1 },
    { CommandCodec,         "-codec",      "cd", "Specify the codec to use - H264 (default) or MJPEG", 1 },
+   { CommandLevel,         "-level",      "lev","Specify H264 level to use for encoding", 1},
+   { CommandRaw,           "-raw",        "r",  "Output filename <filename> for raw video", 1 },
+   { CommandRawFormat,     "-raw-format", "rf", "Specify output format for raw video. Default is yuv", 1},
+   { CommandNetListen,     "-listen",     "l", "Listen on a TCP socket", 0},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -353,6 +415,7 @@ static void default_status(RASPIVID_STATE *state)
    state->demoInterval = 250; // ms
    state->immutableInput = 1;
    state->profile = MMAL_VIDEO_PROFILE_H264_HIGH;
+   state->level = MMAL_VIDEO_LEVEL_H264_4;
    state->waitMethod = WAIT_METHOD_NONE;
    state->onTime = 5000;
    state->offTime = 5000;
@@ -375,6 +438,9 @@ static void default_status(RASPIVID_STATE *state)
 
    state->frame = 0;
    state->save_pts = 0;
+
+   state->netListen = false;
+
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -402,12 +468,16 @@ static void dump_status(RASPIVID_STATE *state)
    fprintf(stderr, "Width %d, Height %d, filename %s\n", state->width, state->height, state->filename);
    fprintf(stderr, "bitrate %d, framerate %d, time delay %d\n", state->bitrate, state->framerate, state->timeout);
    fprintf(stderr, "H264 Profile %s\n", raspicli_unmap_xref(state->profile, profile_map, profile_map_size));
+   fprintf(stderr, "H264 Level %s\n", raspicli_unmap_xref(state->level, level_map, level_map_size));
    fprintf(stderr, "H264 Quantisation level %d, Inline headers %s\n", state->quantisationParameter, state->bInlineHeaders ? "Yes" : "No");
    fprintf(stderr, "H264 Intra refresh type %s, period %d\n", raspicli_unmap_xref(state->intra_refresh_type, intra_refresh_map, intra_refresh_map_size), state->intraperiod);
 
    // Not going to display segment data unless asked for it.
    if (state->segmentSize)
       fprintf(stderr, "Segment size %d, segment wrap value %d, initial segment number %d\n", state->segmentSize, state->segmentWrap, state->segmentNumber);
+
+   if (state->raw_output)
+      fprintf(stderr, "Raw output enabled, format %s\n", raspicli_unmap_xref(state->raw_output_fmt, raw_output_fmt_map, raw_output_fmt_map_size));
 
    fprintf(stderr, "Wait method : ");
    for (i=0;i<wait_method_description_size;i++)
@@ -484,10 +554,6 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
       case CommandBitrate: // 1-100
          if (sscanf(argv[i + 1], "%u", &state->bitrate) == 1)
          {
-            if (state->bitrate > MAX_BITRATE)
-            {
-               state->bitrate = MAX_BITRATE;
-            }
             i++;
          }
          else
@@ -752,10 +818,10 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
          int len = strlen(argv[i + 1]);
          if (len)
          {
-            state->pts_file = malloc(len + 1);
-            vcos_assert(state->pts_file);
-            if (state->pts_file)
-               strncpy(state->pts_file, argv[i + 1], len+1);
+            state->pts_filename = malloc(len + 1);
+            vcos_assert(state->pts_filename);
+            if (state->pts_filename)
+               strncpy(state->pts_filename, argv[i + 1], len+1);
             i++;
          }
          else
@@ -777,6 +843,53 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
          }
          else
             valid = 0;
+         break;
+      }
+
+      case CommandLevel: // H264 level
+      {
+         state->level = raspicli_map_xref(argv[i + 1], level_map, level_map_size);
+
+         if( state->level == -1)
+            state->level = MMAL_VIDEO_LEVEL_H264_4;
+
+         i++;
+         break;
+      }
+
+      case CommandRaw:  // output filename
+      {
+         state->raw_output = 1;
+         state->raw_output_fmt = RAW_OUTPUT_FMT_YUV;
+         int len = strlen(argv[i + 1]);
+         if (len)
+         {
+            state->raw_filename = malloc(len + 1);
+            vcos_assert(state->raw_filename);
+            if (state->raw_filename)
+               strncpy(state->raw_filename, argv[i + 1], len+1);
+            i++;
+         }
+         else
+            valid = 0;
+         break;
+      }
+
+      case CommandRawFormat:
+      {
+         state->raw_output_fmt = raspicli_map_xref(argv[i + 1], raw_output_fmt_map, raw_output_fmt_map_size);
+
+         if (state->raw_output_fmt == -1)
+            valid = 0;
+
+         i++;
+         break;
+      }
+
+      case CommandNetListen:
+      {
+         state->netListen = true;
+
          break;
       }
 
@@ -843,7 +956,13 @@ static void display_valid_parameters(char *app_name)
       fprintf(stdout, ",%s", profile_map[i].mode);
    }
 
-   fprintf(stdout, "\n");
+   // Level options
+   fprintf(stdout, "\n\nH264 Level options :\n%s", level_map[0].mode );
+
+   for (i=1;i<level_map_size;i++)
+   {
+      fprintf(stdout, ",%s", level_map[i].mode);
+   }
 
    // Intra refresh options
    fprintf(stdout, "\n\nH264 Intra refresh options :\n%s", intra_refresh_map[0].mode );
@@ -851,6 +970,14 @@ static void display_valid_parameters(char *app_name)
    for (i=1;i<intra_refresh_map_size;i++)
    {
       fprintf(stdout, ",%s", intra_refresh_map[i].mode);
+   }
+
+   // Raw output format options
+   fprintf(stdout, "\n\nRaw output format options :\n%s", raw_output_fmt_map[0].mode );
+
+   for (i=1;i<raw_output_fmt_map_size;i++)
+   {
+      fprintf(stdout, ",%s", raw_output_fmt_map[i].mode);
    }
 
    fprintf(stdout, "\n");
@@ -913,60 +1040,129 @@ static void camera_control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
  *
  * @param state Pointer to state
  */
-static FILE *open_filename(RASPIVID_STATE *pState)
+static FILE *open_filename(RASPIVID_STATE *pState, char *filename)
 {
    FILE *new_handle = NULL;
-   char *tempname = NULL, *filename = NULL;
+   char *tempname = NULL;
 
    if (pState->segmentSize || pState->splitWait)
    {
       // Create a new filename string
-      asprintf(&tempname, pState->filename, pState->segmentNumber);
+      asprintf(&tempname, filename, pState->segmentNumber);
       filename = tempname;
-   }
-   else
-   {
-      filename = pState->filename;
    }
 
    if (filename)
    {
-      int network = 0, socktype;
+      bool bNetwork = false;
+      int sfd, socktype;
+
       if(!strncmp("tcp://", filename, 6))
       {
-         network = 1;
+         bNetwork = true;
          socktype = SOCK_STREAM;
       }
-      if(!strncmp("udp://", filename, 6))
+      else if(!strncmp("udp://", filename, 6))
       {
-         network = 1;
+         if (pState->netListen)
+         {
+            fprintf(stderr, "No support for listening in UDP mode\n");
+            exit(131);
+         }
+         bNetwork = true;
          socktype = SOCK_DGRAM;
       }
-      if(network)
+
+      if(bNetwork)
       {
+         unsigned short port;
          filename += 6;
          char *colon;
-         colon = strchr(filename, ':');
-         int sfd = socket(AF_INET, socktype, 0);
-         if(sfd < 0)
+         if(NULL == (colon = strchr(filename, ':')))
          {
-              perror("socket");
+            fprintf(stderr, "%s is not a valid IPv4:port, use something like tcp://1.2.3.4:1234 or udp://1.2.3.4:1234\n",
+                    filename);
+            exit(132);
          }
-
-         unsigned short port;
-         sscanf(colon + 1, "%hu", &port);
+         if(1 != sscanf(colon + 1, "%hu", &port))
+         {
+            fprintf(stderr,
+                    "Port parse failed. %s is not a valid network file name, use something like tcp://1.2.3.4:1234 or udp://1.2.3.4:1234\n",
+                    filename);
+            exit(133);
+         }
+         char chTmp = *colon;
          *colon = 0;
 
-         fprintf(stderr, "Connecting to %s:%hu\n", filename, port);
-         
-         struct sockaddr_in saddr;
+         struct sockaddr_in saddr={};
          saddr.sin_family = AF_INET;
          saddr.sin_port = htons(port);
-         inet_aton(filename, &saddr.sin_addr);
-
-         if(connect(sfd, (struct sockaddr *)&saddr, sizeof(struct sockaddr_in)) < 0)
+         if(0 == inet_aton(filename, &saddr.sin_addr))
          {
-            perror("connect");
+            fprintf(stderr, "inet_aton failed. %s is not a valid IPv4 address\n",
+                    filename);
+            exit(134);
+         }
+         *colon = chTmp;
+
+         if (pState->netListen)
+         {
+            int sockListen = socket(AF_INET, SOCK_STREAM, 0);
+            if (sockListen >= 0)
+            {
+               int iTmp = 1;
+               setsockopt(sockListen, SOL_SOCKET, SO_REUSEADDR, &iTmp, sizeof(int));//no error handling, just go on
+               if (bind(sockListen, (struct sockaddr *) &saddr, sizeof(saddr)) >= 0)
+               {
+                  while ((-1 == (iTmp = listen(sockListen, 0))) && (EINTR == errno))
+                     ;
+                  if (-1 != iTmp)
+                  {
+                     fprintf(stderr, "Waiting for a TCP connection on %s:%"SCNu16"...",
+                             inet_ntoa(saddr.sin_addr), ntohs(saddr.sin_port));
+                     struct sockaddr_in cli_addr;
+                     socklen_t clilen = sizeof(cli_addr);
+                     while ((-1 == (sfd = accept(sockListen, (struct sockaddr *) &cli_addr, &clilen))) && (EINTR == errno))
+                        ;
+                     if (sfd >= 0)
+                        fprintf(stderr, "Client connected from %s:%"SCNu16"\n", inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
+                     else
+                        fprintf(stderr, "Error on accept: %s\n", strerror(errno));
+                  }
+                  else//if (-1 != iTmp)
+                  {
+                     fprintf(stderr, "Error trying to listen on a socket: %s\n", strerror(errno));
+                  }
+               }
+               else//if (bind(sockListen, (struct sockaddr *) &saddr, sizeof(saddr)) >= 0)
+               {
+                  fprintf(stderr, "Error on binding socket: %s\n", strerror(errno));
+               }
+            }
+            else//if (sockListen >= 0)
+            {
+               fprintf(stderr, "Error creating socket: %s\n", strerror(errno));
+            }
+
+            if (sockListen >= 0)//regardless success or error
+               close(sockListen);//do not listen on a given port anymore
+         }
+         else//if (pState->netListen)
+         {
+            if(0 <= (sfd = socket(AF_INET, socktype, 0)))
+            {
+               fprintf(stderr, "Connecting to %s:%hu...", inet_ntoa(saddr.sin_addr), port);
+
+               int iTmp = 1;
+               while ((-1 == (iTmp = connect(sfd, (struct sockaddr *) &saddr, sizeof(struct sockaddr_in)))) && (EINTR == errno))
+                  ;
+               if (iTmp < 0)
+                  fprintf(stderr, "error: %s\n", strerror(errno));
+               else
+                  fprintf(stderr, "connected, sending video...\n");
+            }
+            else
+               fprintf(stderr, "Error creating socket: %s\n", strerror(errno));
          }
 
          new_handle = fdopen(sfd, "w");
@@ -992,73 +1188,6 @@ static FILE *open_filename(RASPIVID_STATE *pState)
 }
 
 /**
- * Open a file based on the settings in state
- *
- * This time for the imv output file
- *
- * @param state Pointer to state
- */
-static FILE *open_imv_filename(RASPIVID_STATE *pState)
-{
-   FILE *new_handle = NULL;
-   char *tempname = NULL, *filename = NULL;
-
-   if (pState->segmentSize || pState->splitWait)
-   {
-      // Create a new filename string
-      asprintf(&tempname, pState->imv_filename, pState->segmentNumber);
-      filename = tempname;
-   }
-   else
-   {
-      filename = pState->imv_filename;
-   }
-
-   if (filename)
-      new_handle = fopen(filename, "wb");
-
-   if (pState->verbose)
-   {
-      if (new_handle)
-         fprintf(stderr, "Opening imv output file \"%s\"\n", filename);
-      else
-         fprintf(stderr, "Failed to open new imv file \"%s\"\n", filename);
-   }
-
-   if (tempname)
-      free(tempname);
-
-   return new_handle;
-}
-
-static FILE *open_pts_filename(RASPIVID_STATE *pState)
-{
-   FILE *new_handle = NULL;
-   char *filename = NULL;
-
-   filename = pState->pts_file;
-
-   if (filename)
-      new_handle = fopen(filename, "wb");
-
-   if (pState->verbose)
-   {
-      if (new_handle)
-         fprintf(stderr, "Opening pts output file \"%s\"\n", filename);
-      else
-         fprintf(stderr, "Failed to open new pts file \"%s\"\n", filename);
-   }
-
-   if (new_handle)
-   {
-      //save header for mkvmerge
-      fprintf(new_handle,"# timecode format v2\n");
-   }
-
-   return new_handle;
-}
-
-/**
  * Update any annotation data specific to the video.
  * This simply passes on the setting from cli, or
  * if application defined annotate requested, updates
@@ -1073,13 +1202,14 @@ static void update_annotation_data(RASPIVID_STATE *state)
    if (state->camera_parameters.enable_annotate & ANNOTATE_APP_TEXT)
    {
       char *text;
-      char *refresh = raspicli_unmap_xref(state->intra_refresh_type, intra_refresh_map, intra_refresh_map_size);
+      const char *refresh = raspicli_unmap_xref(state->intra_refresh_type, intra_refresh_map, intra_refresh_map_size);
 
-      asprintf(&text,  "%dk,%df,%s,%d,%s",
+      asprintf(&text,  "%dk,%df,%s,%d,%s,%s",
             state->bitrate / 1000,  state->framerate,
             refresh ? refresh : "(none)",
             state->intraperiod,
-            raspicli_unmap_xref(state->profile, profile_map, profile_map_size));
+            raspicli_unmap_xref(state->profile, profile_map, profile_map_size),
+            raspicli_unmap_xref(state->level, level_map, level_map_size));
 
       raspicamcontrol_set_annotate(state->camera_component, state->camera_parameters.enable_annotate, text,
                        state->camera_parameters.annotate_text_size,
@@ -1229,20 +1359,37 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
             if (pData->pstate->segmentWrap && pData->pstate->segmentNumber > pData->pstate->segmentWrap)
                pData->pstate->segmentNumber = 1;
 
-            new_handle = open_filename(pData->pstate);
-
-            if (new_handle)
+            if (pData->pstate->filename && pData->pstate->filename[0] != '-')
             {
-               fclose(pData->file_handle);
-               pData->file_handle = new_handle;
+               new_handle = open_filename(pData->pstate, pData->pstate->filename);
+
+               if (new_handle)
+               {
+                  fclose(pData->file_handle);
+                  pData->file_handle = new_handle;
+               }
             }
 
-            new_handle = open_imv_filename(pData->pstate);
-
-            if (new_handle)
+            if (pData->pstate->imv_filename && pData->pstate->imv_filename[0] != '-')
             {
-               fclose(pData->imv_file_handle);
-               pData->imv_file_handle = new_handle;
+               new_handle = open_filename(pData->pstate, pData->pstate->imv_filename);
+
+               if (new_handle)
+               {
+                  fclose(pData->imv_file_handle);
+                  pData->imv_file_handle = new_handle;
+               }
+            }
+
+            if (pData->pstate->pts_filename && pData->pstate->pts_filename[0] != '-')
+            {
+               new_handle = open_filename(pData->pstate, pData->pstate->pts_filename);
+
+               if (new_handle)
+               {
+                  fclose(pData->pts_file_handle);
+                  pData->pts_file_handle = new_handle;
+               }
             }
          }
          if (buffer->length)
@@ -1278,7 +1425,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
                     if(pData->pstate->frame==0)pData->pstate->starttime=buffer->pts;
                     pData->pstate->lasttime=buffer->pts;
                     pts = buffer->pts - pData->pstate->starttime;
-                    fprintf(pData->pts_file_handle,"%d.%03d\n", pts/1000, pts%1000);
+                    fprintf(pData->pts_file_handle,"%lld.%03lld\n", pts/1000, pts%1000);
                     pData->pstate->frame++;
                   }
                }
@@ -1321,6 +1468,66 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 
       if (!new_buffer || status != MMAL_SUCCESS)
          vcos_log_error("Unable to return a buffer to the encoder port");
+   }
+}
+
+/**
+ *  buffer header callback function for splitter
+ *
+ *  Callback will dump buffer data to the specific file
+ *
+ * @param port Pointer to port from which callback originated
+ * @param buffer mmal buffer header pointer
+ */
+static void splitter_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
+{
+   MMAL_BUFFER_HEADER_T *new_buffer;
+   PORT_USERDATA *pData = (PORT_USERDATA *)port->userdata;
+
+   if (pData)
+   {
+      int bytes_written = 0;
+      int bytes_to_write = buffer->length;
+
+      /* Write only luma component to get grayscale image: */
+      if (buffer->length && pData->pstate->raw_output_fmt == RAW_OUTPUT_FMT_GRAY)
+         bytes_to_write = port->format->es->video.width * port->format->es->video.height;
+
+      vcos_assert(pData->raw_file_handle);
+
+      if (bytes_to_write)
+      {
+         mmal_buffer_header_mem_lock(buffer);
+         bytes_written = fwrite(buffer->data, 1, bytes_to_write, pData->raw_file_handle);
+         mmal_buffer_header_mem_unlock(buffer);
+
+         if (bytes_written != bytes_to_write)
+         {
+            vcos_log_error("Failed to write raw buffer data (%d from %d)- aborting", bytes_written, bytes_to_write);
+            pData->abort = 1;
+         }
+      }
+   }
+   else
+   {
+      vcos_log_error("Received a camera buffer callback with no state");
+   }
+
+   // release buffer back to the pool
+   mmal_buffer_header_release(buffer);
+
+   // and send one back to the port (if still open)
+   if (port->is_enabled)
+   {
+      MMAL_STATUS_T status;
+
+      new_buffer = mmal_queue_get(pData->pstate->splitter_pool->queue);
+
+      if (new_buffer)
+         status = mmal_port_send_buffer(port, new_buffer);
+
+      if (!new_buffer || status != MMAL_SUCCESS)
+         vcos_log_error("Unable to return a buffer to the splitter port");
    }
 }
 
@@ -1421,7 +1628,7 @@ static MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state)
          .one_shot_stills = 0,
          .max_preview_video_w = state->width,
          .max_preview_video_h = state->height,
-         .num_preview_video_frames = 3,
+         .num_preview_video_frames = 3 + vcos_max(0, (state->framerate-30)/10),
          .stills_capture_circular_buffer_height = 0,
          .fast_preview_resume = 0,
          .use_stc_timestamp = MMAL_PARAM_TIMESTAMP_MODE_RAW_STC
@@ -1594,6 +1801,161 @@ static void destroy_camera_component(RASPIVID_STATE *state)
 }
 
 /**
+ * Create the splitter component, set up its ports
+ *
+ * @param state Pointer to state control struct
+ *
+ * @return MMAL_SUCCESS if all OK, something else otherwise
+ *
+ */
+static MMAL_STATUS_T create_splitter_component(RASPIVID_STATE *state)
+{
+   MMAL_COMPONENT_T *splitter = 0;
+   MMAL_PORT_T *splitter_output = NULL;
+   MMAL_ES_FORMAT_T *format;
+   MMAL_STATUS_T status;
+   MMAL_POOL_T *pool;
+   int i;
+
+   if (state->camera_component == NULL)
+   {
+      status = MMAL_ENOSYS;
+      vcos_log_error("Camera component must be created before splitter");
+      goto error;
+   }
+
+   /* Create the component */
+   status = mmal_component_create(MMAL_COMPONENT_DEFAULT_VIDEO_SPLITTER, &splitter);
+
+   if (status != MMAL_SUCCESS)
+   {
+      vcos_log_error("Failed to create splitter component");
+      goto error;
+   }
+
+   if (!splitter->input_num)
+   {
+      status = MMAL_ENOSYS;
+      vcos_log_error("Splitter doesn't have any input port");
+      goto error;
+   }
+
+   if (splitter->output_num < 2)
+   {
+      status = MMAL_ENOSYS;
+      vcos_log_error("Splitter doesn't have enough output ports");
+      goto error;
+   }
+
+   /* Ensure there are enough buffers to avoid dropping frames: */
+   mmal_format_copy(splitter->input[0]->format, state->camera_component->output[MMAL_CAMERA_PREVIEW_PORT]->format);
+
+   if (splitter->input[0]->buffer_num < VIDEO_OUTPUT_BUFFERS_NUM)
+      splitter->input[0]->buffer_num = VIDEO_OUTPUT_BUFFERS_NUM;
+
+   status = mmal_port_format_commit(splitter->input[0]);
+
+   if (status != MMAL_SUCCESS)
+   {
+      vcos_log_error("Unable to set format on splitter input port");
+      goto error;
+   }
+
+   /* Splitter can do format conversions, configure format for its output port: */
+   for (i = 0; i < splitter->output_num; i++)
+   {
+      mmal_format_copy(splitter->output[i]->format, splitter->input[0]->format);
+
+      if (i == SPLITTER_OUTPUT_PORT)
+      {
+         format = splitter->output[i]->format;
+
+         switch (state->raw_output_fmt)
+         {
+         case RAW_OUTPUT_FMT_YUV:
+         case RAW_OUTPUT_FMT_GRAY: /* Grayscale image contains only luma (Y) component */
+            format->encoding = MMAL_ENCODING_I420;
+            format->encoding_variant = MMAL_ENCODING_I420;
+            break;
+         case RAW_OUTPUT_FMT_RGB:
+            if (mmal_util_rgb_order_fixed(state->camera_component->output[MMAL_CAMERA_CAPTURE_PORT]))
+               format->encoding = MMAL_ENCODING_RGB24;
+            else
+               format->encoding = MMAL_ENCODING_BGR24;
+            format->encoding_variant = 0;  /* Irrelevant when not in opaque mode */
+            break;
+         default:
+            status = MMAL_EINVAL;
+            vcos_log_error("unknown raw output format");
+            goto error;
+         }
+      }
+
+      status = mmal_port_format_commit(splitter->output[i]);
+
+      if (status != MMAL_SUCCESS)
+      {
+         vcos_log_error("Unable to set format on splitter output port %d", i);
+         goto error;
+      }
+   }
+
+   /* Enable component */
+   status = mmal_component_enable(splitter);
+
+   if (status != MMAL_SUCCESS)
+   {
+      vcos_log_error("splitter component couldn't be enabled");
+      goto error;
+   }
+
+   /* Create pool of buffer headers for the output port to consume */
+   splitter_output = splitter->output[SPLITTER_OUTPUT_PORT];
+   pool = mmal_port_pool_create(splitter_output, splitter_output->buffer_num, splitter_output->buffer_size);
+
+   if (!pool)
+   {
+      vcos_log_error("Failed to create buffer header pool for splitter output port %s", splitter_output->name);
+   }
+
+   state->splitter_pool = pool;
+   state->splitter_component = splitter;
+
+   if (state->verbose)
+      fprintf(stderr, "Splitter component done\n");
+
+   return status;
+
+error:
+
+   if (splitter)
+      mmal_component_destroy(splitter);
+
+   return status;
+}
+
+/**
+ * Destroy the splitter component
+ *
+ * @param state Pointer to state control struct
+ *
+ */
+static void destroy_splitter_component(RASPIVID_STATE *state)
+{
+   // Get rid of any port buffers first
+   if (state->splitter_pool)
+   {
+      mmal_port_pool_destroy(state->splitter_component->output[SPLITTER_OUTPUT_PORT], state->splitter_pool);
+   }
+
+   if (state->splitter_component)
+   {
+      mmal_component_destroy(state->splitter_component);
+      state->splitter_component = NULL;
+   }
+}
+
+/**
  * Create the encoder component, set up its ports
  *
  * @param state Pointer to state control struct
@@ -1632,6 +1994,34 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
    // Only supporting H264 at the moment
    encoder_output->format->encoding = state->encoding;
 
+   if(state->encoding == MMAL_ENCODING_H264)
+   {
+      if(state->level == MMAL_VIDEO_LEVEL_H264_4)
+      {
+         if(state->bitrate > MAX_BITRATE_LEVEL4)
+         {
+            fprintf(stderr, "Bitrate too high: Reducing to 25MBit/s\n");
+            state->bitrate = MAX_BITRATE_LEVEL4;
+         }
+      }
+      else
+      {
+         if(state->bitrate > MAX_BITRATE_LEVEL42)
+         {
+            fprintf(stderr, "Bitrate too high: Reducing to 62.5MBit/s\n");
+            state->bitrate = MAX_BITRATE_LEVEL42;
+         }
+      }
+   }
+   else if(state->encoding == MMAL_ENCODING_MJPEG)
+   {
+      if(state->bitrate > MAX_BITRATE_MJPEG)
+      {
+         fprintf(stderr, "Bitrate too high: Reducing to 25MBit/s\n");
+         state->bitrate = MAX_BITRATE_MJPEG;
+      }
+   }
+   
    encoder_output->format->bitrate = state->bitrate;
 
    if (state->encoding == MMAL_ENCODING_H264)
@@ -1723,7 +2113,22 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
       param.hdr.size = sizeof(param);
 
       param.profile[0].profile = state->profile;
-      param.profile[0].level = MMAL_VIDEO_LEVEL_H264_4; // This is the only value supported
+
+      if((VCOS_ALIGN_UP(state->width,16) >> 4) * (VCOS_ALIGN_UP(state->height,16) >> 4) * state->framerate > 245760)
+      {
+         if((VCOS_ALIGN_UP(state->width,16) >> 4) * (VCOS_ALIGN_UP(state->height,16) >> 4) * state->framerate <= 522240)
+         {
+            fprintf(stderr, "Too many macroblocks/s: Increasing H264 Level to 4.2\n");
+            state->level=MMAL_VIDEO_LEVEL_H264_42;
+         }
+         else
+         {
+            vcos_log_error("Too many macroblocks/s requested");
+            goto error;
+         }
+      }
+      
+      param.profile[0].level = state->level;
 
       status = mmal_port_parameter_set(encoder_output, &param.hdr);
       if (status != MMAL_SUCCESS)
@@ -2040,6 +2445,9 @@ int main(int argc, const char **argv)
    MMAL_PORT_T *preview_input_port = NULL;
    MMAL_PORT_T *encoder_input_port = NULL;
    MMAL_PORT_T *encoder_output_port = NULL;
+   MMAL_PORT_T *splitter_input_port = NULL;
+   MMAL_PORT_T *splitter_output_port = NULL;
+   MMAL_PORT_T *splitter_preview_port = NULL;
 
    bcm_host_init();
 
@@ -2096,6 +2504,14 @@ int main(int argc, const char **argv)
       destroy_camera_component(&state);
       exit_code = EX_SOFTWARE;
    }
+   else if (state.raw_output && (status = create_splitter_component(&state)) != MMAL_SUCCESS)
+   {
+      vcos_log_error("%s: Failed to create splitter component", __func__);
+      raspipreview_destroy(&state.preview_parameters);
+      destroy_camera_component(&state);
+      destroy_encoder_component(&state);
+      exit_code = EX_SOFTWARE;
+   }
    else
    {
       if (state.verbose)
@@ -2108,29 +2524,81 @@ int main(int argc, const char **argv)
       encoder_input_port  = state.encoder_component->input[0];
       encoder_output_port = state.encoder_component->output[0];
 
+      if (state.raw_output)
+      {
+         splitter_input_port = state.splitter_component->input[0];
+         splitter_output_port = state.splitter_component->output[SPLITTER_OUTPUT_PORT];
+         splitter_preview_port = state.splitter_component->output[SPLITTER_PREVIEW_PORT];
+      }
+
       if (state.preview_parameters.wantPreview )
       {
-         if (state.verbose)
+         if (state.raw_output)
          {
-            fprintf(stderr, "Connecting camera preview port to preview input port\n");
-            fprintf(stderr, "Starting video preview\n");
-         }
+            if (state.verbose)
+               fprintf(stderr, "Connecting camera preview port to splitter input port\n");
 
-         // Connect camera to preview
-         status = connect_ports(camera_preview_port, preview_input_port, &state.preview_connection);
+            // Connect camera to splitter
+            status = connect_ports(camera_preview_port, splitter_input_port, &state.splitter_connection);
+
+            if (status != MMAL_SUCCESS)
+            {
+               state.splitter_connection = NULL;
+               vcos_log_error("%s: Failed to connect camera preview port to splitter input", __func__);
+               goto error;
+            }
+
+            if (state.verbose)
+            {
+               fprintf(stderr, "Connecting splitter preview port to preview input port\n");
+               fprintf(stderr, "Starting video preview\n");
+            }
+
+            // Connect splitter to preview
+            status = connect_ports(splitter_preview_port, preview_input_port, &state.preview_connection);
+         }
+         else
+         {
+            if (state.verbose)
+            {
+               fprintf(stderr, "Connecting camera preview port to preview input port\n");
+               fprintf(stderr, "Starting video preview\n");
+            }
+
+            // Connect camera to preview
+            status = connect_ports(camera_preview_port, preview_input_port, &state.preview_connection);
+         }
 
          if (status != MMAL_SUCCESS)
             state.preview_connection = NULL;
       }
       else
       {
-         status = MMAL_SUCCESS;
+         if (state.raw_output)
+         {
+            if (state.verbose)
+               fprintf(stderr, "Connecting camera preview port to splitter input port\n");
+
+            // Connect camera to splitter
+            status = connect_ports(camera_preview_port, splitter_input_port, &state.splitter_connection);
+
+            if (status != MMAL_SUCCESS)
+            {
+               state.splitter_connection = NULL;
+               vcos_log_error("%s: Failed to connect camera preview port to splitter input", __func__);
+               goto error;
+            }
+         }
+         else
+         {
+            status = MMAL_SUCCESS;
+         }
       }
 
       if (status == MMAL_SUCCESS)
       {
          if (state.verbose)
-            fprintf(stderr, "Connecting camera stills port to encoder input port\n");
+            fprintf(stderr, "Connecting camera video port to encoder input port\n");
 
          // Now connect the camera to the encoder
          status = connect_ports(camera_video_port, encoder_input_port, &state.encoder_connection);
@@ -2140,6 +2608,30 @@ int main(int argc, const char **argv)
             state.encoder_connection = NULL;
             vcos_log_error("%s: Failed to connect camera video port to encoder input", __func__);
             goto error;
+         }
+      }
+
+      if (status == MMAL_SUCCESS)
+      {
+         // Set up our userdata - this is passed though to the callback where we need the information.
+         state.callback_data.pstate = &state;
+         state.callback_data.abort = 0;
+
+         if (state.raw_output)
+         {
+            splitter_output_port->userdata = (struct MMAL_PORT_USERDATA_T *)&state.callback_data;
+
+            if (state.verbose)
+               fprintf(stderr, "Enabling splitter output port\n");
+
+            // Enable the splitter output port and tell it its callback function
+            status = mmal_port_enable(splitter_output_port, splitter_buffer_callback);
+
+            if (status != MMAL_SUCCESS)
+            {
+               vcos_log_error("%s: Failed to setup splitter output port", __func__);
+               goto error;
+            }
          }
 
          state.callback_data.file_handle = NULL;
@@ -2155,7 +2647,7 @@ int main(int argc, const char **argv)
             }
             else
             {
-               state.callback_data.file_handle = open_filename(&state);
+               state.callback_data.file_handle = open_filename(&state, state.filename);
             }
 
             if (!state.callback_data.file_handle)
@@ -2175,7 +2667,7 @@ int main(int argc, const char **argv)
             }
             else
             {
-               state.callback_data.imv_file_handle = open_imv_filename(&state);
+               state.callback_data.imv_file_handle = open_filename(&state, state.imv_filename);
             }
 
             if (!state.callback_data.imv_file_handle)
@@ -2188,22 +2680,45 @@ int main(int argc, const char **argv)
 
          state.callback_data.pts_file_handle = NULL;
 
-         if (state.pts_file)
+         if (state.pts_filename)
          {
-            if (state.pts_file[0] == '-')
+            if (state.pts_filename[0] == '-')
             {
                state.callback_data.pts_file_handle = stdout;
             }
             else
             {
-               state.callback_data.pts_file_handle = open_pts_filename(&state);
+               state.callback_data.pts_file_handle = open_filename(&state, state.pts_filename);
+               if (state.callback_data.pts_file_handle) /* save header for mkvmerge */
+                  fprintf(state.callback_data.pts_file_handle, "# timecode format v2\n");
             }
 
             if (!state.callback_data.pts_file_handle)
             {
                // Notify user, carry on but discarding encoded output buffers
-               fprintf(stderr, "Error opening output file: %s\nNo output file will be generated\n",state.pts_file);
+               fprintf(stderr, "Error opening output file: %s\nNo output file will be generated\n",state.pts_filename);
                state.save_pts=0;
+            }
+         }
+
+         state.callback_data.raw_file_handle = NULL;
+
+         if (state.raw_filename)
+         {
+            if (state.raw_filename[0] == '-')
+            {
+               state.callback_data.raw_file_handle = stdout;
+            }
+            else
+            {
+               state.callback_data.raw_file_handle = open_filename(&state, state.raw_filename);
+            }
+
+            if (!state.callback_data.raw_file_handle)
+            {
+               // Notify user, carry on but discarding encoded output buffers
+               fprintf(stderr, "Error opening output file: %s\nNo output file will be generated\n", state.raw_filename);
+               state.raw_output = 0;
             }
          }
 
@@ -2253,9 +2768,6 @@ int main(int argc, const char **argv)
          }
 
          // Set up our userdata - this is passed though to the callback where we need the information.
-         state.callback_data.pstate = &state;
-         state.callback_data.abort = 0;
-
          encoder_output_port->userdata = (struct MMAL_PORT_USERDATA_T *)&state.callback_data;
 
          if (state.verbose)
@@ -2306,6 +2818,22 @@ int main(int argc, const char **argv)
 
                      if (mmal_port_send_buffer(encoder_output_port, buffer)!= MMAL_SUCCESS)
                         vcos_log_error("Unable to send a buffer to encoder output port (%d)", q);
+                  }
+               }
+
+               // Send all the buffers to the splitter output port
+               if (state.raw_output) {
+                  int num = mmal_queue_length(state.splitter_pool->queue);
+                  int q;
+                  for (q = 0; q < num; q++)
+                  {
+                     MMAL_BUFFER_HEADER_T *buffer = mmal_queue_get(state.splitter_pool->queue);
+
+                     if (!buffer)
+                        vcos_log_error("Unable to get a required buffer %d from pool queue", q);
+
+                     if (mmal_port_send_buffer(splitter_output_port, buffer)!= MMAL_SUCCESS)
+                        vcos_log_error("Unable to send a buffer to splitter output port (%d)", q);
                   }
                }
 
@@ -2406,12 +2934,16 @@ error:
       // Disable all our ports that are not handled by connections
       check_disable_port(camera_still_port);
       check_disable_port(encoder_output_port);
+      check_disable_port(splitter_output_port);
 
       if (state.preview_parameters.wantPreview && state.preview_connection)
          mmal_connection_destroy(state.preview_connection);
 
       if (state.encoder_connection)
          mmal_connection_destroy(state.encoder_connection);
+
+      if (state.splitter_connection)
+         mmal_connection_destroy(state.splitter_connection);
 
       // Can now close our file. Note disabling ports may flush buffers which causes
       // problems if we have already closed the file!
@@ -2421,6 +2953,8 @@ error:
          fclose(state.callback_data.imv_file_handle);
       if (state.callback_data.pts_file_handle && state.callback_data.pts_file_handle != stdout)
          fclose(state.callback_data.pts_file_handle);
+      if (state.callback_data.raw_file_handle && state.callback_data.raw_file_handle != stdout)
+         fclose(state.callback_data.raw_file_handle);
 
       /* Disable components */
       if (state.encoder_component)
@@ -2429,11 +2963,15 @@ error:
       if (state.preview_parameters.preview_component)
          mmal_component_disable(state.preview_parameters.preview_component);
 
+      if (state.splitter_component)
+         mmal_component_disable(state.splitter_component);
+
       if (state.camera_component)
          mmal_component_disable(state.camera_component);
 
       destroy_encoder_component(&state);
       raspipreview_destroy(&state.preview_parameters);
+      destroy_splitter_component(&state);
       destroy_camera_component(&state);
 
       if (state.verbose)

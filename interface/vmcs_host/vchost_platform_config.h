@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2012, Broadcom Europe Ltd
+Copyright (c) 2016, Raspberry Pi (Trading) Ltd
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -25,15 +25,8 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef HOST_APP_H
-#define HOST_APP_H
-
-#include "platform.h"
-
-//Definition for the single message handler, as provided by the host app.
-extern void host_app_message_handler( const uint16_t msg, const uint32_t param1, const uint32_t param2);
-
-//Definition for a function that returns the host app's name
-extern char *host_app_name( void );
-
-#endif /* HOST_APP_H */
+#if defined(__unix__) && !defined(__ANDROID__)
+#include "linux/vchost_config.h"
+#else
+#include "vchost_config.h"
+#endif

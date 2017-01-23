@@ -15,3 +15,4 @@ sudo apt-get install gcc-4.6 g++-4.6
 and then run
 chmdod u+x gcc-version.sh
 ./gcc-version.sh 4.6
+

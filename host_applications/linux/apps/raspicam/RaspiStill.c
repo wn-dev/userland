@@ -143,6 +143,7 @@ typedef struct
    int sensor_mode;                     /// Sensor mode. 0=auto. Check docs/forum for modes selected by other values.
    int datetime;                       /// Use DateTime instead of frame#
    int timestamp;                      /// Use timestamp instead of frame#
+   int restart_interval;               /// JPEG restart interval. 0 for none.
 
    RASPIPREVIEW_PARAMETERS preview_parameters;    /// Preview setup parameters
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
@@ -198,6 +199,7 @@ static void store_exif_tag(RASPISTILL_STATE *state, const char *exif_tag);
 #define CommandDateTime     23
 #define CommandTimeStamp    24
 #define CommandFrameStart   25
+#define CommandRestartInterval 26
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -227,6 +229,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandDateTime,  "-datetime",  "dt", "Replace output pattern (%d) with DateTime (MonthDayHourMinSec)", 0},
    { CommandTimeStamp, "-timestamp", "ts", "Replace output pattern (%d) with unix timestamp (seconds since 1970)", 0},
    { CommandFrameStart,"-framestart","fs",  "Starting frame number in output pattern(%d)", 1},
+   { CommandRestartInterval, "-restart","rs","JPEG Restart interval (default of 0 for none)", 1},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -295,7 +298,7 @@ static void set_sensor_defaults(RASPISTILL_STATE *state)
             state->camera_name[MMAL_PARAMETER_CAMERA_INFO_MAX_STR_LEN-1] = 0;
          }
          else
-            vcos_log_error("Cannot read cameara info, keeping the defaults for OV5647");
+            vcos_log_error("Cannot read camera info, keeping the defaults for OV5647");
       }
       else
       {
@@ -356,6 +359,7 @@ static void default_status(RASPISTILL_STATE *state)
    state->sensor_mode = 0;
    state->datetime = 0;
    state->timestamp = 0;
+   state->restart_interval = 0;
 
    // Setup for sensor specific parameters
    set_sensor_defaults(state);
@@ -566,7 +570,7 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
 
       case CommandFrameStart:  // use a staring value != 0
       {
-         if (sscanf(argv[i + 1], "%u", &state->frameStart) == 1)
+         if (sscanf(argv[i + 1], "%d", &state->frameStart) == 1)
          {
            i++;
          }
@@ -712,7 +716,7 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          state->settings = 1;
          break;
 
-         
+
       case CommandCamSelect:  //Select camera input port
       {
          if (sscanf(argv[i + 1], "%u", &state->cameraNum) == 1)
@@ -724,7 +728,7 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          break;
       }
 
-      case CommandBurstMode: 
+      case CommandBurstMode:
          state->burstCaptureMode=1;
          break;
 
@@ -739,6 +743,16 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          break;
       }
 
+      case CommandRestartInterval:
+      {
+         if (sscanf(argv[i + 1], "%u", &state->restart_interval) == 1)
+         {
+           i++;
+         }
+         else
+            valid = 0;
+         break;
+      }
 
       default:
       {
@@ -1039,7 +1053,7 @@ static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
 
       mmal_port_parameter_set(camera->control, &cam_config.hdr);
    }
- 
+
    raspicamcontrol_set_all_parameters(camera, &state->camera_parameters);
 
    // Now set up the port formats
@@ -1257,6 +1271,15 @@ static MMAL_STATUS_T create_encoder_component(RASPISTILL_STATE *state)
    if (status != MMAL_SUCCESS)
    {
       vcos_log_error("Unable to set JPEG quality");
+      goto error;
+   }
+
+   // Set the JPEG restart interval
+   status = mmal_port_parameter_set_uint32(encoder_output, MMAL_PARAMETER_JPEG_RESTART_INTERVAL, state->restart_interval);
+
+   if (state->restart_interval && status != MMAL_SUCCESS)
+   {
+      vcos_log_error("Unable to set JPEG restart interval");
       goto error;
    }
 
@@ -1885,7 +1908,7 @@ int main(int argc, const char **argv)
             char *use_filename = NULL;      // Temporary filename while image being written
             char *final_filename = NULL;    // Name that file gets once writing complete
 
-            frame = state.frameStart;
+            frame = state.frameStart - 1;
 
             while (keep_looping)
             {
@@ -1986,7 +2009,7 @@ int main(int argc, const char **argv)
                   }
 
                   // There is a possibility that shutter needs to be set each loop.
-                  if (mmal_status_to_int(mmal_port_parameter_set_uint32(state.camera_component->control, MMAL_PARAMETER_SHUTTER_SPEED, state.camera_parameters.shutter_speed) != MMAL_SUCCESS))
+                  if (mmal_status_to_int(mmal_port_parameter_set_uint32(state.camera_component->control, MMAL_PARAMETER_SHUTTER_SPEED, state.camera_parameters.shutter_speed)) != MMAL_SUCCESS)
                      vcos_log_error("Unable to set shutter speed");
 
 
@@ -2017,6 +2040,13 @@ int main(int argc, const char **argv)
                   {
                      mmal_port_parameter_set_boolean(state.camera_component->control,  MMAL_PARAMETER_CAMERA_BURST_CAPTURE, 1);
                   }
+
+                  if(state.camera_parameters.enable_annotate)
+                     raspicamcontrol_set_annotate(state.camera_component, state.camera_parameters.enable_annotate, 
+                                      state.camera_parameters.annotate_string,
+                                      state.camera_parameters.annotate_text_size,
+                                      state.camera_parameters.annotate_text_colour,
+                                      state.camera_parameters.annotate_bg_colour);
 
                   if (state.verbose)
                      fprintf(stderr, "Starting capture %d\n", frame);

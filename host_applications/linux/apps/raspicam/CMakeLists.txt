@@ -5,6 +5,7 @@ SET(COMPILE_DEFINITIONS -Werror)
 
 include_directories(${PROJECT_SOURCE_DIR}/host_applications/linux/libs/bcm_host/include)
 include_directories(${PROJECT_SOURCE_DIR}/host_applications/linux/apps/raspicam/)
+include_directories(${PROJECT_SOURCE_DIR}/host_applications/linux/libs/sm)
 
 set (GL_SCENE_SOURCES
    gl_scenes/models.c
@@ -12,7 +13,8 @@ set (GL_SCENE_SOURCES
    gl_scenes/yuv.c
    gl_scenes/sobel.c
    gl_scenes/square.c
-   gl_scenes/teapot.c)
+   gl_scenes/teapot.c
+   gl_scenes/vcsm_square.c)
 
 set (COMMON_SOURCES
    RaspiCamControl.c
@@ -27,7 +29,7 @@ add_executable(raspimjpeg RaspiMJPEG.c RaspiMCam.c RaspiMCmds.c RaspiMUtils.c Ra
 
 set (MMAL_LIBS mmal_core mmal_util mmal_vc_client)
 
-target_link_libraries(raspistill ${MMAL_LIBS} vcos bcm_host GLESv2 EGL m)
+target_link_libraries(raspistill ${MMAL_LIBS} vcos bcm_host brcmGLESv2 brcmEGL m)
 target_link_libraries(raspiyuv   ${MMAL_LIBS} vcos bcm_host)
 target_link_libraries(raspivid   ${MMAL_LIBS} vcos bcm_host)
 target_link_libraries(raspividyuv   ${MMAL_LIBS} vcos bcm_host)
