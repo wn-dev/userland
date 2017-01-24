@@ -1059,6 +1059,10 @@ void start_all (int load_conf) {
    if(status != MMAL_SUCCESS && status != MMAL_ENOSYS) error("Could not create video encoder", 1);
 
    mmal_format_copy(h264encoder->output[0]->format, h264encoder->input[0]->format);
+   
+   status = mmal_port_parameter_set_boolean(h264encoder->output[0], MMAL_PARAMETER_MINIMISE_FRAGMENTATION, cfg_val[c_minimise_frag] ? MMAL_TRUE : MMAL_FALSE);
+   if(status != MMAL_SUCCESS) error("Could not set fragmentation false", 1);
+   
    h264encoder->output[0]->format->encoding = MMAL_ENCODING_H264;
    h264encoder->output[0]->format->bitrate = cfg_val[c_video_bitrate];
    h264encoder->output[0]->buffer_size = h264encoder->output[0]->buffer_size_recommended;
