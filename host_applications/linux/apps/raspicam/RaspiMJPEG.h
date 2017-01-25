@@ -31,7 +31,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /**
  * \file RaspiMJPEG.h
  **/
-#define VERSION "5.7.02" 
+#define VERSION "5.7.05" 
  
 #include <stdio.h>
 #include <stdlib.h>
@@ -55,7 +55,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/mmal/util/mmal_default_components.h"
 #include "interface/mmal/util/mmal_connection.h"
 
-#define IFRAME_BUFSIZE (60*1000)
+#define IFRAME_BUFSIZE (128*1024)
 #define STD_INTRAPERIOD 60
 extern MMAL_STATUS_T status;
 extern MMAL_COMPONENT_T *camera, *jpegencoder, *jpegencoder2, *h264encoder, *resizer, *null_sink, *splitter;
@@ -85,7 +85,7 @@ extern char *box_files[MAX_BOX_FILES];
 extern int box_head;
 extern int box_tail;
 //hold config file data for both dflt and user config files and u long versions
-#define KEY_COUNT 95
+#define KEY_COUNT 97
 extern char *cfg_strd[KEY_COUNT + 1];
 extern char *cfg_stru[KEY_COUNT + 1];
 extern long int cfg_val[KEY_COUNT + 1];
@@ -121,15 +121,16 @@ typedef enum cfgkey_type
    c_base_path,c_preview_path,c_image_path,c_lapse_path,c_video_path,c_status_file,c_control_file,c_media_path,c_macros_path,c_subdir_char,
    c_thumb_gen,c_autostart,c_motion_detection,c_motion_file,c_vector_preview,c_vector_mode,c_motion_external,
    c_motion_noise,c_motion_threshold,c_motion_image,c_motion_startframes,c_motion_stopframes,c_motion_pipe,c_motion_clip,
-   c_user_config,c_log_file,c_log_size,c_watchdog_interval,c_watchdog_errors, c_h264_buffers,c_callback_timeout,
+   c_user_config,c_log_file,c_log_size,c_watchdog_interval,c_watchdog_errors, c_h264_buffer_size, c_h264_buffers,c_callback_timeout,
    c_error_soft, c_error_hard, c_start_img, c_end_img, c_start_vid, c_end_vid, c_end_box, c_do_cmd,
-   c_camera_num,c_stat_pass,c_user_annotate,c_count_format,c_minimise_frag
+   c_camera_num,c_stat_pass,c_user_annotate,c_count_format,c_minimise_frag,c_mmal_logfile
    } cfgkey_type; 
 
 struct timespec currTime;
 struct tm *localTime;
 
 //Utils
+void mmalLog(char *msg, ...);
 void printLog(char *msg, ...);
 void updateStatus();
 void error (const char *string, char fatal);

@@ -94,9 +94,9 @@ char *cfg_key[] ={
    "base_path","preview_path","image_path","lapse_path","video_path","status_file","control_file","media_path","macros_path","subdir_char",
    "thumb_gen","autostart","motion_detection","motion_file","vector_preview","vector_mode", "motion_external",
    "motion_noise","motion_threshold","motion_image","motion_startframes","motion_stopframes","motion_pipe","motion_clip",
-   "user_config","log_file","log_size","watchdog_interval","watchdog_errors","h264_buffers","callback_timeout",
+   "user_config","log_file","log_size","watchdog_interval","watchdog_errors","h264_buffer_size","h264_buffers","callback_timeout",
    "error_soft", "error_hard", "start_img", "end_img", "start_vid", "end_vid", "end_box", "do_cmd",
-   "camera_num","stat_pass","user_annotate","count_format","minimise_frag"
+   "camera_num","stat_pass","user_annotate","count_format","minimise_frag","mmal_logfile"
 };
 
 

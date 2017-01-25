@@ -42,6 +42,27 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include "RaspiMJPEG.h"
 
+void mmalLog(char *msg, ...) {
+   if (cfg_stru[c_mmal_logfile]) {
+      va_list args;
+      va_start(args, msg);
+      int nofile = 0;
+      FILE *fp;
+
+      nofile = (access(cfg_stru[c_mmal_logfile], F_OK ) == -1 );
+      fp = fopen(cfg_stru[c_mmal_logfile], "a");
+      if (fp != NULL) {
+         clock_gettime(CLOCK_REALTIME, &currTime);
+         localTime = localtime (&(currTime.tv_sec));
+         fprintf(fp, "%02d %lu ",localTime->tm_sec,currTime.tv_nsec);
+         vfprintf(fp, msg, args);
+         fclose(fp);
+         if (nofile) chmod(cfg_stru[c_mmal_logfile], 0777);
+      }
+      va_end(args);
+   }
+}
+
 void printLog(char *msg, ...) {
    char *timestamp;
    va_list args;

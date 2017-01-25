@@ -161,6 +161,7 @@ void close_img(int callback) {
 static void h264encoder_buffer_callback (MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)  {
   //pthread_mutex_lock(&v_mutex);
   int bytes_written = buffer->length;
+  mmalLog("h264 %d %lu\n",bytes_written,buffer->flags);
 
   if((buffer->flags & MMAL_BUFFER_HEADER_FLAG_CODECSIDEINFO)) {
     if(cfg_val[c_vector_preview]) {
@@ -887,6 +888,7 @@ void start_all (int load_conf) {
    //pthread_mutex_lock(&v_mutex);
    MMAL_ES_FORMAT_T *format;
    int max, i;
+   int h264_size;
 
    set_counts();
    //reload config if requested
@@ -1065,9 +1067,15 @@ void start_all (int load_conf) {
    
    h264encoder->output[0]->format->encoding = MMAL_ENCODING_H264;
    h264encoder->output[0]->format->bitrate = cfg_val[c_video_bitrate];
-   h264encoder->output[0]->buffer_size = h264encoder->output[0]->buffer_size_recommended;
-   if(h264encoder->output[0]->buffer_size < h264encoder->output[0]->buffer_size_min)
-     h264encoder->output[0]->buffer_size = h264encoder->output[0]->buffer_size_min;
+   printLog("recommended video buffer size %d\n", h264encoder->output[0]->buffer_size_recommended);
+   if(cfg_val[c_h264_buffer_size] != 0) {
+	   h264_size = cfg_val[c_h264_buffer_size];
+   } else {
+	   h264_size = h264encoder->output[0]->buffer_size_recommended;
+   }	   
+   if(h264_size < h264encoder->output[0]->buffer_size_min) h264_size = h264encoder->output[0]->buffer_size_min;
+   h264encoder->output[0]->buffer_size = h264_size;
+   printLog("h264 size set to %d\n", h264_size);
    printLog("recommended video buffers %d\n", h264encoder->output[0]->buffer_num_recommended);
    if(cfg_val[c_h264_buffers] == 0) {
       printLog("h264 buffers set to recommended %d\n", h264encoder->output[0]->buffer_num_recommended);
