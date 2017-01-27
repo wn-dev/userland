@@ -117,15 +117,19 @@ void send_motion_stop() {
 
 void analyse_vectors(MMAL_BUFFER_HEADER_T *buffer) {
    if(!cfg_val[c_motion_external]) {
-      if (cfg_val[c_motion_detection]) {
-         if (cfg_val[c_motion_noise] < 1000) {
-            analyse_vectors1(buffer);
-         } else {
-            analyse_vectors2(buffer);
+	  if(buffer->length >= (4 * motion_width * motion_height)) {
+         if (cfg_val[c_motion_detection]) {
+            if (cfg_val[c_motion_noise] < 1000) {
+               analyse_vectors1(buffer);
+            } else {
+               analyse_vectors2(buffer);
+            }
          }
-      }
-      if (cfg_val[c_motion_file])
-         save_vectors(buffer);
+         if (cfg_val[c_motion_file])
+            save_vectors(buffer);
+	  } else {
+		  printLog("Unexpected vector buffer size %d\n", buffer->length);
+	  }
    }
 }
 
@@ -178,7 +182,7 @@ void analyse_vectors1(MMAL_BUFFER_HEADER_T *buffer) {
 void analyse_vectors2(MMAL_BUFFER_HEADER_T *buffer) {
    unsigned char *data = buffer->data;
    float filter = cfg_val[c_motion_noise] - 999;
-   int i, m, row, col, vectorsum, clip;
+   int i, m, row, col, vectorsum, clip, zerocheck;
    int buffer_width = 4 * motion_width;
    i = buffer_width+4;
    m = 0;
