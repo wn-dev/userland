@@ -238,7 +238,8 @@ void process_cmd(char *readbuf, int length) {
          addUserValue(c_watchdog_errors, pars[1]);
          break;
       case ru:
-         if (par0 == 0) {
+			exec_macro(cfg_stru[c_do_cmd], readbuf);
+			if (par0 == 0) {
             stop_all();
             idle = 1;
             printLog("Stream halted\n");
