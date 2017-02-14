@@ -31,7 +31,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /**
  * \file RaspiMJPEG.h
  **/
-#define VERSION "5.7.07" 
+#define VERSION "5.7.08" 
  
 #include <stdio.h>
 #include <stdlib.h>
@@ -85,7 +85,7 @@ extern char *box_files[MAX_BOX_FILES];
 extern int box_head;
 extern int box_tail;
 //hold config file data for both dflt and user config files and u long versions
-#define KEY_COUNT 97
+#define KEY_COUNT 98
 extern char *cfg_strd[KEY_COUNT + 1];
 extern char *cfg_stru[KEY_COUNT + 1];
 extern long int cfg_val[KEY_COUNT + 1];
@@ -116,7 +116,7 @@ typedef enum cfgkey_type
    c_shutter_speed,c_raw_layer,
    c_width,c_quality,c_divider,
    c_video_width,c_video_height,c_video_fps,c_video_bitrate,c_video_buffer,
-   c_MP4Box,c_MP4Box_fps,c_boxing_path,
+   c_MP4Box,c_MP4Box_fps,c_boxing_path,c_MP4Box_cmd,
    c_image_width,c_image_height,c_image_quality,c_tl_interval,
    c_base_path,c_preview_path,c_image_path,c_lapse_path,c_video_path,c_status_file,c_control_file,c_media_path,c_macros_path,c_subdir_char,
    c_thumb_gen,c_autostart,c_motion_detection,c_motion_file,c_vector_preview,c_vector_mode,c_motion_external,

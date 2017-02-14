@@ -409,7 +409,8 @@ int check_box_files() {
    if(v_boxing == 0 && get_box_count() > 0) {
       //start new MP4Box operation
       makeBoxname(&filename_temp, box_files[box_tail]);
-      asprintf(&cmd_temp, "(MP4Box -fps %i -add %s %s > /dev/null 2>&1;rm \"%s\";) &", cfg_val[c_MP4Box_fps], filename_temp, box_files[box_tail], filename_temp);
+	  if(cfg_stru[c_MP4Box_cmd] == 0) cfg_stru[c_MP4Box_cmd] = "(set -e;MP4Box -fps %i -add %s %s > /dev/null 2>&1;rm \"%s\";) &";
+      asprintf(&cmd_temp, cfg_stru[c_MP4Box_cmd], cfg_val[c_MP4Box_fps], filename_temp, box_files[box_tail], filename_temp);
       printLog("Start boxing %s to %s Queue pos %d\n", filename_temp, box_files[box_tail], box_tail);
       system(cmd_temp);
       v_boxing = 1;

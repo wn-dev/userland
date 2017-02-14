@@ -89,7 +89,7 @@ char *cfg_key[] ={
    "shutter_speed","raw_layer",
    "width","quality","divider",
    "video_width","video_height","video_fps","video_bitrate","video_buffer",
-   "MP4Box","MP4Box_fps","boxing_path",
+   "MP4Box","MP4Box_fps","boxing_path","MP4Box_cmd",
    "image_width","image_height","image_quality","tl_interval",
    "base_path","preview_path","image_path","lapse_path","video_path","status_file","control_file","media_path","macros_path","subdir_char",
    "thumb_gen","autostart","motion_detection","motion_file","vector_preview","vector_mode", "motion_external",
