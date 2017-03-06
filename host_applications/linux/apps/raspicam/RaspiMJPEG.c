@@ -88,7 +88,7 @@ char *cfg_key[] ={
    "sensor_region_x","sensor_region_y","sensor_region_w","sensor_region_h",
    "shutter_speed","raw_layer",
    "width","quality","divider",
-   "video_width","video_height","video_fps","video_bitrate","video_buffer",
+   "video_width","video_height","video_fps","video_bitrate","video_buffer","video_split",
    "MP4Box","MP4Box_fps","boxing_path","MP4Box_cmd",
    "image_width","image_height","image_quality","tl_interval",
    "base_path","preview_path","image_path","lapse_path","video_path","status_file","control_file","media_path","macros_path","subdir_char",
@@ -425,6 +425,11 @@ int main (int argc, char* argv[]) {
             if (time(NULL) >= video_stoptime) {
                printLog("Stopping video from timer\n");
                stop_video(0);
+			   if (cfg_val[c_video_split] > 0) {
+                  video_stoptime = time(NULL) + cfg_val[c_video_split];
+                  printLog("Restarting next split of %d seconds\n", cfg_val[c_video_split]);
+			      start_video(0);
+			   }
             }
          }
       }
