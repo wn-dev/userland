@@ -52,7 +52,7 @@ void process_cmd(char *readbuf, int length) {
    long int par0;
    char cmd[3];
    char par[MAX_COMMAND_LEN];
-   char *parstring=0, *temp;
+   char *parstring=0, *temp, *settingsback;
    int key = -1;
    
    if (length < 2 || length > (MAX_COMMAND_LEN - 2)) return;
@@ -291,8 +291,11 @@ void process_cmd(char *readbuf, int length) {
          printLog("Scan for highest count\n");
          break;
       case rs:
-         printLog("Reset settings to defaults\n");
+         printLog("Reset settings. Backed up and cleared to defaults\n");
          stop_all();
+		 asprintf(&settingsback, "%s.bak", cfg_stru[c_user_config]);
+         saveUserConfig(settingsback);
+		 if (settingsback != 0) free(settingsback);
          read_config("/etc/raspimjpeg", 1);
          saveUserConfig(cfg_stru[c_user_config]);
          start_all(0);
