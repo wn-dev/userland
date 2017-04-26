@@ -553,7 +553,7 @@ void stop_video(unsigned char stop_buf) {
         status = mmal_connection_enable(con_spli_h264);
         if(status != MMAL_SUCCESS) error("Could not enable connection splitter -> video converter", 1);
       }
-      else if(cfg_val[c_vector_preview]) {
+      else if(cfg_val[c_vector_preview] || cfg_val[c_motion_external] == 2) {
         status = mmal_connection_destroy(con_cam_pre);
         if(status != MMAL_SUCCESS) error("Could not destroy connection camera -> null sink", 1);
         status = mmal_connection_create(&con_cam_pre, camera->output[0], h264encoder->input[0], MMAL_CONNECTION_FLAG_TUNNELLING | MMAL_CONNECTION_FLAG_ALLOCATION_ON_INPUT);

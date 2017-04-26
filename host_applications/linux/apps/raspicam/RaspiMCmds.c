@@ -267,7 +267,7 @@ void process_cmd(char *readbuf, int length) {
       case md:
          exec_macro(cfg_stru[c_do_cmd], readbuf);
          stop_all();
-         if (cfg_val[c_motion_external]) {
+         if (cfg_val[c_motion_external] == 1) {
             if(par0 == 0) {
                if(system("killall motion 2> /dev/null") == -1) error("Could not stop external motion", 1);
                printLog("External motion detection stopped\n");

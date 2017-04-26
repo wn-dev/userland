@@ -65,7 +65,7 @@ void setup_motiondetect() {
    }
    mask_valid = 0;
    
-   if (!cfg_val[c_motion_external]) {
+   if (cfg_val[c_motion_external] != 1) {
       mask_size = motion_width * motion_height;
       printLog("Set up internal detect width=%d height=%d\n", motion_width, motion_height);
       if (cfg_val[c_motion_file])
@@ -108,17 +108,27 @@ void setup_motiondetect() {
 }
 
 void send_motion_start() {
-   send_schedulecmd("1");
+   exec_macro(cfg_stru[c_motion_event], "1");
+   if(cfg_val[c_motion_external] == 0) {
+	   send_schedulecmd("1");
+   } else if(cfg_val[c_motion_external] == 2){
+	   printLogEx(c_motion_logfile, "Motion start detected\n");
+   }
 }
 
 void send_motion_stop() {
-   send_schedulecmd("0");   
+   exec_macro(cfg_stru[c_motion_event], "0");
+   if(cfg_val[c_motion_external] == 0) {
+	   send_schedulecmd("0");
+   } else if(cfg_val[c_motion_external] == 2){
+	   printLogEx(c_motion_logfile, "Motion stop detected\n");
+   }
 }
 
 void analyse_vectors(MMAL_BUFFER_HEADER_T *buffer) {
-   if(!cfg_val[c_motion_external]) {
+   if(cfg_val[c_motion_external] != 1) {
 	  if(buffer->length >= (4 * motion_width * motion_height)) {
-         if (cfg_val[c_motion_detection]) {
+         if (cfg_val[c_motion_detection] || cfg_val[c_motion_external] == 2 ) {
             if (cfg_val[c_motion_noise] < 1000) {
                analyse_vectors1(buffer);
             } else {
@@ -182,7 +192,7 @@ void analyse_vectors1(MMAL_BUFFER_HEADER_T *buffer) {
 void analyse_vectors2(MMAL_BUFFER_HEADER_T *buffer) {
    unsigned char *data = buffer->data;
    float filter = cfg_val[c_motion_noise] - 999;
-   int i, m, row, col, vectorsum, clip, zerocheck;
+   int i, m, row, col, vectorsum, clip;
    int buffer_width = 4 * motion_width;
    i = buffer_width+4;
    m = 0;

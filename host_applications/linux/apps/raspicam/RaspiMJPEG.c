@@ -93,9 +93,9 @@ char *cfg_key[] ={
    "image_width","image_height","image_quality","tl_interval",
    "base_path","preview_path","image_path","lapse_path","video_path","status_file","control_file","media_path","macros_path","subdir_char",
    "thumb_gen","autostart","motion_detection","motion_file","vector_preview","vector_mode", "motion_external",
-   "motion_noise","motion_threshold","motion_image","motion_startframes","motion_stopframes","motion_pipe","motion_clip",
+   "motion_noise","motion_threshold","motion_image","motion_startframes","motion_stopframes","motion_pipe","motion_clip","motion_logfile",
    "user_config","log_file","log_size","watchdog_interval","watchdog_errors","h264_buffer_size","h264_buffers","callback_timeout",
-   "error_soft", "error_hard", "start_img", "end_img", "start_vid", "end_vid", "end_box", "do_cmd",
+   "error_soft", "error_hard", "start_img", "end_img", "start_vid", "end_vid", "end_box", "do_cmd","motion_event",
    "camera_num","stat_pass","user_annotate","count_format","minimise_frag","mmal_logfile"
 };
 
@@ -353,7 +353,7 @@ int main (int argc, char* argv[]) {
    if(cfg_val[c_autostart]) {
 	 printLog("MJPEG streaming, ready to receive commands\n");
 	 //kick off motion detection at start if required.
-	 if(cfg_val[c_motion_detection] && cfg_val[c_motion_external]) {
+	 if(cfg_val[c_motion_detection] && cfg_val[c_motion_external] == 1) {
 		printLog("Autostart external motion kill any runnng motion\n");
 		if(system("killall motion 2> /dev/null") == -1) error("Could not stop external motion", 1);
 		sleep(1);

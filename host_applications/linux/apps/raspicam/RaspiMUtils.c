@@ -63,6 +63,35 @@ void mmalLog(char *msg, ...) {
    }
 }
 
+void printLogEx(int logfile, char *msg, ...) {
+   char *timestamp;
+   va_list args;
+   va_start(args, msg);
+   int nofile = 0;
+   FILE *fp;
+   vfprintf(stdout, msg, args);
+
+   if (cfg_stru[logfile] != 0 && cfg_val[c_log_size] != 0) {
+      nofile = (access(cfg_stru[logfile], F_OK ) == -1 );
+      fp = fopen(cfg_stru[logfile], "a");
+   } else {
+      fp = stdout;
+   }
+   if (fp != NULL) {
+      clock_gettime(CLOCK_REALTIME, &currTime);
+      localTime = localtime (&(currTime.tv_sec));
+      makeName(&timestamp, "{%Y/%M/%D %h:%m:%s} ");
+      fprintf(fp, "%s",timestamp);
+      vfprintf(fp, msg, args);
+      if (cfg_stru[logfile] != 0) {
+         fclose(fp);
+         if (nofile) chmod(cfg_stru[logfile], 0777);
+      }
+      free(timestamp);
+   }
+   va_end(args);
+}
+
 void printLog(char *msg, ...) {
    char *timestamp;
    va_list args;
@@ -70,6 +99,7 @@ void printLog(char *msg, ...) {
    int nofile = 0;
    FILE *fp;
    vfprintf(stdout, msg, args);
+   
 
    if (cfg_stru[c_log_file] != 0 && cfg_val[c_log_size] != 0) {
       nofile = (access(cfg_stru[c_log_file], F_OK ) == -1 );
