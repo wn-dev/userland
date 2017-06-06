@@ -95,8 +95,8 @@ char *cfg_key[] ={
    "thumb_gen","autostart","motion_detection","motion_file","vector_preview","vector_mode", "motion_external",
    "motion_noise","motion_threshold","motion_image","motion_startframes","motion_stopframes","motion_pipe","motion_clip","motion_logfile",
    "user_config","log_file","log_size","watchdog_interval","watchdog_errors","h264_buffer_size","h264_buffers","callback_timeout",
-   "error_soft", "error_hard", "start_img", "end_img", "start_vid", "end_vid", "end_box", "do_cmd","motion_event",
-   "camera_num","stat_pass","user_annotate","count_format","minimise_frag","mmal_logfile"
+   "error_soft", "error_hard", "start_img", "end_img", "start_vid", "end_vid", "end_box", "do_cmd","motion_event","startstop",
+   "camera_num","stat_pass","user_annotate","count_format","minimise_frag","mmal_logfile","stop_pause"
 };
 
 
@@ -299,6 +299,7 @@ int main (int argc, char* argv[]) {
    }
    
    printLog("RaspiMJPEG Version %s\n", VERSION);
+   exec_macro(cfg_stru[c_startstop],"start");
    
    if(cfg_val[c_autostart]) start_all(0);
 
@@ -444,5 +445,6 @@ int main (int argc, char* argv[]) {
    // tidy up
    //
    if(!idle) stop_all();
+   exec_macro(cfg_stru[c_startstop],"stop");
    return 0;
 }
