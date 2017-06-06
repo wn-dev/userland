@@ -606,6 +606,8 @@ void stop_video(unsigned char stop_buf) {
      printLog("Already stopped. Ignore \n");
   }
   stop_vectors();
+  if(cfg_val[c_stop_pause])
+	  usleep(cfg_val[c_stop_pause]);
   //pthread_mutex_unlock(&v_mutex);
 }
 
@@ -1362,8 +1364,6 @@ void stop_all (void) {
     mmal_component_destroy(splitter);
     splitter = NULL;
   }
-  if(cfg_val[c_stop_pause])
-	  usleep(cfg_val[c_stop_pause]);
   //pthread_mutex_unlock(&v_mutex);
 }
 
