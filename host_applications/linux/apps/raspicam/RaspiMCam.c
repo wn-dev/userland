@@ -442,6 +442,7 @@ void capt_img (void) {
 void start_video(unsigned char prepare_buf) {
   //pthread_mutex_lock(&v_mutex);
   char *filename_temp;
+  char *filename_temp1;
 
   if(!v_capturing || prepare_buf) {
     if(prepare_buf) cam_set_ip(0);
@@ -489,12 +490,14 @@ void start_video(unsigned char prepare_buf) {
         //trim off extension
         char *ext = strrchr(filename_recording, '.');
         if (ext != NULL) *ext = 0;
-        asprintf(&filename_temp, "%s.h264", filename_recording);
-        thumb_create(filename_temp, 'v');
-        start_vectors(filename_temp);
+        asprintf(&filename_temp1, "%s.h264", filename_recording);
         //restore full filename
         if (ext != NULL) *ext = '.';
+        thumb_create(filename_temp1, 'v');
+        start_vectors(filename_temp1);
+        makeBoxname(&filename_temp, filename_temp1);
         h264output_file = fopen(filename_temp, "wb");
+		free(filename_temp1);
       }
       free(filename_temp);
       if(!h264output_file) {error("Could not open/create video-file", 0); return;}

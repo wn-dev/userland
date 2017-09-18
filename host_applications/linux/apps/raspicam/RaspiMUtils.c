@@ -391,14 +391,18 @@ time_t get_mtime(const char *path) {
 
 void makeBoxname(char** boxname, char *filename) {
    char *temp;
+   //trim off extension
+   char *ext = strrchr(filename, '.');
+   if (ext != NULL) *ext = 0;
    if (cfg_stru[c_boxing_path] != NULL) {
       temp = strrchr(filename, '/');
       if (temp != NULL) {
          asprintf(boxname, "%s/%s.h264", cfg_stru[c_boxing_path], temp+1);
-         return;
       }
+   } else {
+      asprintf(boxname, "%s.h264", filename);
    }
-   asprintf(boxname, "%s.h264", filename);
+   if (ext != NULL) *ext = '.';
 }
 
 int get_box_count() {
