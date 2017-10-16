@@ -400,7 +400,9 @@ void thumb_create(char *from_filename, char source) {
 }
 
 void capt_img (void) {
-
+   if(cfg_val[c_raw_layer] == 1) {
+	  cam_set(c_raw_layer);
+   }
    clock_gettime(CLOCK_REALTIME, &currTime);
    localTime = localtime (&(currTime.tv_sec));
    if(timelapse && strlen(cfg_stru[c_lapse_path]) > 10) {
