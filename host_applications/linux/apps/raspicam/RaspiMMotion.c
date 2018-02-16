@@ -43,6 +43,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "RaspiMJPEG.h"
 
 int motion_width, motion_height, motion_img_width, motion_img_height;
+int motion_init_count;
 int motion_frame_count;
 int motion_changes;
 int motion_state; // 0 search for start, 1 search for stop
@@ -71,6 +72,7 @@ void setup_motiondetect() {
       if (cfg_val[c_motion_file])
          vector_buffer = (unsigned char *)malloc(mask_size * 4 * VECTOR_BUFFER_FRAMES);
       
+	  motion_init_count = cfg_val[c_motion_initframes];
       motion_frame_count = 0;
       motion_state = 0;
       vector_buffer_index = 0;
@@ -127,18 +129,22 @@ void send_motion_stop() {
 
 void analyse_vectors(MMAL_BUFFER_HEADER_T *buffer) {
    if(cfg_val[c_motion_external] != 1) {
-	  if(buffer->length >= (4 * motion_width * motion_height)) {
-         if (cfg_val[c_motion_detection] || cfg_val[c_motion_external] == 2 ) {
-            if (cfg_val[c_motion_noise] < 1000) {
-               analyse_vectors1(buffer);
-            } else {
-               analyse_vectors2(buffer);
-            }
-         }
-         if (cfg_val[c_motion_file])
-            save_vectors(buffer);
+	  if(motion_init_count < 1) {
+		  if(buffer->length >= (4 * motion_width * motion_height)) {
+			 if (cfg_val[c_motion_detection] || cfg_val[c_motion_external] == 2 ) {
+				if (cfg_val[c_motion_noise] < 1000) {
+				   analyse_vectors1(buffer);
+				} else {
+				   analyse_vectors2(buffer);
+				}
+			 }
+			 if (cfg_val[c_motion_file])
+				save_vectors(buffer);
+		  } else {
+			  printLog("Unexpected vector buffer size %d\n", buffer->length);
+		  }
 	  } else {
-		  printLog("Unexpected vector buffer size %d\n", buffer->length);
+		  motion_init_count--;
 	  }
    }
 }
