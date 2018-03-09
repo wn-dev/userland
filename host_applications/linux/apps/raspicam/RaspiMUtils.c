@@ -247,7 +247,7 @@ char* trim(char*s) {
 
 void makeName(char** name, char *template) {
    //Create name from template
-   const int max_len = 100;
+   const int max_len = 150;
    const int max_subs = 20;
    char spec[16] = "%YyMDhmsuvitfcka";
    char *template1;

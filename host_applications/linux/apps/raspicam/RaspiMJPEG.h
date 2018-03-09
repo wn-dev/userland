@@ -31,7 +31,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /**
  * \file RaspiMJPEG.h
  **/
-#define VERSION "5.8.07" 
+#define VERSION "5.8.08" 
  
 #include <stdio.h>
 #include <stdlib.h>
@@ -85,7 +85,7 @@ extern char *box_files[MAX_BOX_FILES];
 extern int box_head;
 extern int box_tail;
 //hold config file data for both dflt and user config files and u long versions
-#define KEY_COUNT 104
+#define KEY_COUNT 106
 extern char *cfg_strd[KEY_COUNT + 1];
 extern char *cfg_stru[KEY_COUNT + 1];
 extern long int cfg_val[KEY_COUNT + 1];
@@ -123,7 +123,7 @@ typedef enum cfgkey_type
    c_motion_noise,c_motion_threshold,c_motion_image,c_motion_initframes,c_motion_startframes,c_motion_stopframes,c_motion_pipe,c_motion_clip,c_motion_logfile,
    c_user_config,c_log_file,c_log_size,c_watchdog_interval,c_watchdog_errors, c_h264_buffer_size, c_h264_buffers,c_callback_timeout,
    c_error_soft, c_error_hard, c_start_img, c_end_img, c_start_vid, c_end_vid, c_end_box, c_do_cmd,c_motion_event,c_startstop,
-   c_camera_num,c_stat_pass,c_user_annotate,c_count_format,c_minimise_frag,c_mmal_logfile,c_stop_pause,
+   c_camera_num,c_stat_pass,c_user_annotate,c_count_format,c_minimise_frag,c_initial_quant,c_encode_qp,c_mmal_logfile,c_stop_pause,
    } cfgkey_type; 
 
 struct timespec currTime;

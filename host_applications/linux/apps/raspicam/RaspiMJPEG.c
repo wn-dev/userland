@@ -96,7 +96,7 @@ char *cfg_key[] ={
    "motion_noise","motion_threshold","motion_image","motion_initframes","motion_startframes","motion_stopframes","motion_pipe","motion_clip","motion_logfile",
    "user_config","log_file","log_size","watchdog_interval","watchdog_errors","h264_buffer_size","h264_buffers","callback_timeout",
    "error_soft", "error_hard", "start_img", "end_img", "start_vid", "end_vid", "end_box", "do_cmd","motion_event","startstop",
-   "camera_num","stat_pass","user_annotate","count_format","minimise_frag","mmal_logfile","stop_pause"
+   "camera_num","stat_pass","user_annotate","count_format","minimise_frag","initial_quant","encode_qp","mmal_logfile","stop_pause"
 };
 
 

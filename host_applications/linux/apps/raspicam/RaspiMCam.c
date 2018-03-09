@@ -1098,11 +1098,15 @@ void start_all (int load_conf) {
    status = mmal_port_format_commit(h264encoder->output[0]);
    if(status != MMAL_SUCCESS) error("Could not set video format", 1);
 
-   MMAL_PARAMETER_UINT32_T param2 = {{ MMAL_PARAMETER_VIDEO_ENCODE_INITIAL_QUANT, sizeof(param2)}, 25};
+   i = cfg_val[c_initial_quant];
+   if(i == 0) i = 25;
+   MMAL_PARAMETER_UINT32_T param2 = {{ MMAL_PARAMETER_VIDEO_ENCODE_INITIAL_QUANT, sizeof(param2)}, i};
    status = mmal_port_parameter_set(h264encoder->output[0], &param2.hdr);
    if(status != MMAL_SUCCESS) error("Could not set video quantisation I", 1);
 
-   MMAL_PARAMETER_UINT32_T param3 = {{ MMAL_PARAMETER_VIDEO_ENCODE_QP_P, sizeof(param3)}, 31};
+   i = cfg_val[c_encode_qp];
+   if(i == 0) i = 31;
+   MMAL_PARAMETER_UINT32_T param3 = {{ MMAL_PARAMETER_VIDEO_ENCODE_QP_P, sizeof(param3)}, i};
    status = mmal_port_parameter_set(h264encoder->output[0], &param3.hdr);
    if(status != MMAL_SUCCESS) error("Could not set video quantisation II", 1);
 
