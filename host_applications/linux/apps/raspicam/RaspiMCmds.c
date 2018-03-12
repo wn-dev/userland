@@ -54,14 +54,17 @@ void process_cmd(char *readbuf, int length) {
    char par[MAX_COMMAND_LEN];
    char *parstring=0, *temp, *settingsback;
    int key = -1;
-   
    if (length < 2 || length > (MAX_COMMAND_LEN - 2)) return;
    
    //Get cmd
    strncpy(cmd, readbuf, 2);
-    //find 2 letter command and translate into enum
+   cmd[2] = 0;
+   //find 2 letter command and translate into enum
    temp = strstr(pipe_cmds, cmd);
-   if (temp == NULL) return;
+   if (temp == NULL) {
+	   printf("cmd not found in\n", cmd);
+	   return;
+   }
    pipe_cmd = (pipe_cmd_type)((temp - pipe_cmds) / 3);
   
    if(length > 3) {
