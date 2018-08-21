@@ -904,6 +904,7 @@ void start_all (int load_conf) {
       if (cfg_stru[c_user_config] != 0)
          read_config(cfg_stru[c_user_config],0);
    }
+   if(cfg_val[c_MP4Box]) check_h264_toBox();
    
    //
    // create camera

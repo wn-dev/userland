@@ -31,7 +31,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /**
  * \file RaspiMJPEG.h
  **/
-#define VERSION "5.8.09" 
+#define VERSION "5.8.11" 
  
 #include <stdio.h>
 #include <stdlib.h>
@@ -146,6 +146,7 @@ time_t get_mtime(const char *path);
 void makeBoxname(char** boxname, char *filename);
 void add_box_file(char *boxfile);
 int check_box_files();
+void check_h264_toBox();
 void send_schedulecmd(char *cmd);
 
 //Camera

@@ -63,11 +63,11 @@ void mmalLog(char *msg, ...) {
 	}
 }
 
-	char *timestamp;
 void printLogEx(int logfile, char *msg, ...) {
 	va_list args;
 	va_start(args, msg);
 	int nofile = 0;
+	char *timestamp;
 	FILE *fp;
 	vfprintf(stdout, msg, args);
 
@@ -448,6 +448,43 @@ int check_box_files() {
 		free(filename_temp);
 	}
 	return ret;
+}
+
+void check_h264_toBox() {
+	char* search;
+	char *n, *s, *e;
+	char *h264;
+	DIR *dp;
+	struct dirent *fp;
+    if(get_box_count() == 0) {
+		// get working copy of video path
+		makeFilename(&search, cfg_stru[c_video_path]);
+		// find base path from last /
+		s = strrchr(search, '/');
+		printLog("h264 search %s\n", search);
+		if (s != NULL) {
+			//truncate off to get base path and open it
+			*s = 0;
+			dp = opendir(search);
+			if (dp != NULL) {
+				//scan the contents
+				while ((fp = readdir(dp))) {
+					n = fp->d_name;
+					// check if file is h264
+					e = n + strlen(n) - 5;
+					if (e > n && strcmp(e, ".h264") == 0) {
+						*(n + strlen(n) - 5) = 0;
+						asprintf(&h264, "%s/%s.mp4", search, n);
+						printLog("h264 found %s\n", h264);
+						add_box_file(h264);
+						free(h264);
+					}
+				}
+				closedir (dp);
+			}
+		}
+		free(search);
+	}
 }   
 
 void send_schedulecmd(char *cmd) {
