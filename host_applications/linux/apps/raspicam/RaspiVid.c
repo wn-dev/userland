@@ -59,6 +59,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <memory.h>
 #include <sysexits.h>
 
@@ -66,6 +67,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <time.h>
 
 #define VERSION_STRING "v1.3.12"
 
@@ -79,6 +81,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interface/mmal/util/mmal_util_params.h"
 #include "interface/mmal/util/mmal_default_components.h"
 #include "interface/mmal/util/mmal_connection.h"
+#include "interface/mmal/mmal_parameters_camera.h"
 
 #include "RaspiCamControl.h"
 #include "RaspiPreview.h"
@@ -232,6 +235,7 @@ struct RASPIVID_STATE_S
    int64_t lasttime;
 
    bool netListen;
+   MMAL_BOOL_T addSPSTiming;
 };
 
 
@@ -255,7 +259,6 @@ static XREF_T  level_map[] =
 };
 
 static int level_map_size = sizeof(level_map) / sizeof(level_map[0]);
-
 
 static XREF_T  initial_map[] =
 {
@@ -323,6 +326,7 @@ static void display_valid_parameters(char *app_name);
 #define CommandRaw          32
 #define CommandRawFormat    33
 #define CommandNetListen    34
+#define CommandSPSTimings   35
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -333,7 +337,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandOutput,        "-output",     "o",  "Output filename <filename> (to write to stdout, use '-o -').\n"
          "\t\t  Connect to a remote IPv4 host (e.g. tcp://192.168.1.2:1234, udp://192.168.1.2:1234)\n"
          "\t\t  To listen on a TCP port (IPv4) and wait for an incoming connection use -l\n"
-         "\t\t  (e.g. raspvid -l -o tcp://0.0.0.0:3333 -> bind to all network interfaces, raspvid -l -o tcp://192.168.1.1:3333 -> bind to a certain local IPv4)", 1 },
+         "\t\t  (e.g. raspivid -l -o tcp://0.0.0.0:3333 -> bind to all network interfaces, raspivid -l -o tcp://192.168.1.1:3333 -> bind to a certain local IPv4)", 1 },
    { CommandVerbose,       "-verbose",    "v",  "Output verbose information during run", 0 },
    { CommandTimeout,       "-timeout",    "t",  "Time (in ms) to capture for. If not specified, set to 5s. Zero to disable", 1 },
    { CommandDemoMode,      "-demo",       "d",  "Run a demo mode (cycle through range of camera options, no capture)", 1},
@@ -364,6 +368,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandRaw,           "-raw",        "r",  "Output filename <filename> for raw video", 1 },
    { CommandRawFormat,     "-raw-format", "rf", "Specify output format for raw video. Default is yuv", 1},
    { CommandNetListen,     "-listen",     "l", "Listen on a TCP socket", 0},
+   { CommandSPSTimings,    "-spstimings",    "stm", "Add in h.264 sps timings", 0},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -440,6 +445,7 @@ static void default_status(RASPIVID_STATE *state)
    state->save_pts = 0;
 
    state->netListen = false;
+   state->addSPSTiming = MMAL_FALSE;
 
 
    // Setup preview window defaults
@@ -449,6 +455,39 @@ static void default_status(RASPIVID_STATE *state)
    raspicamcontrol_set_defaults(&state->camera_parameters);
 }
 
+static void check_camera_model(int cam_num)
+{
+   MMAL_COMPONENT_T *camera_info;
+   MMAL_STATUS_T status;
+
+   // Try to get the camera name
+   status = mmal_component_create(MMAL_COMPONENT_DEFAULT_CAMERA_INFO, &camera_info);
+   if (status == MMAL_SUCCESS)
+   {
+      MMAL_PARAMETER_CAMERA_INFO_T param;
+      param.hdr.id = MMAL_PARAMETER_CAMERA_INFO;
+      param.hdr.size = sizeof(param)-4;  // Deliberately undersize to check firmware version
+      status = mmal_port_parameter_get(camera_info->control, &param.hdr);
+
+      if (status != MMAL_SUCCESS)
+      {
+         // Running on newer firmware
+         param.hdr.size = sizeof(param);
+         status = mmal_port_parameter_get(camera_info->control, &param.hdr);
+         if (status == MMAL_SUCCESS && param.num_cameras > cam_num)
+         {
+            if (!strncmp(param.cameras[cam_num].camera_name, "toshh2c", 7))
+            {
+               fprintf(stderr, "The driver for the TC358743 HDMI to CSI2 chip you are using is NOT supported.\n");
+               fprintf(stderr, "They were written for a demo purposes only, and are in the firmware on an as-is\n");
+               fprintf(stderr, "basis and therefore requests for support or changes will not be acted on.\n\n");
+            }
+         }
+      }
+
+      mmal_component_destroy(camera_info);
+   }
+}
 
 /**
  * Dump image state parameters to stderr.
@@ -470,6 +509,7 @@ static void dump_status(RASPIVID_STATE *state)
    fprintf(stderr, "H264 Profile %s\n", raspicli_unmap_xref(state->profile, profile_map, profile_map_size));
    fprintf(stderr, "H264 Level %s\n", raspicli_unmap_xref(state->level, level_map, level_map_size));
    fprintf(stderr, "H264 Quantisation level %d, Inline headers %s\n", state->quantisationParameter, state->bInlineHeaders ? "Yes" : "No");
+   fprintf(stderr, "H264 Fill SPS Timings %s\n", state->addSPSTiming ? "Yes" : "No");
    fprintf(stderr, "H264 Intra refresh type %s, period %d\n", raspicli_unmap_xref(state->intra_refresh_type, intra_refresh_map, intra_refresh_map_size), state->intraperiod);
 
    // Not going to display segment data unless asked for it.
@@ -633,7 +673,7 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
             valid = 0;
          break;
       }
-
+      
       case CommandPreviewEnc:
          state->immutableInput = 0;
          break;
@@ -893,6 +933,13 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
          break;
       }
 
+      case CommandSPSTimings:
+      {
+         state->addSPSTiming = MMAL_TRUE;
+
+         break;
+      }
+
       default:
       {
          // Try parsing for any image specific parameters
@@ -921,12 +968,6 @@ static int parse_cmdline(int argc, const char **argv, RASPIVID_STATE *state)
    {
       fprintf(stderr, "Invalid command line option (%s)\n", argv[i-1]);
       return 1;
-   }
-
-   // Always disable verbose if output going to stdout
-   if (state->filename && state->filename[0] == '-')
-   {
-      state->verbose = 0;
    }
 
    return 0;
@@ -1048,14 +1089,39 @@ static FILE *open_filename(RASPIVID_STATE *pState, char *filename)
    if (pState->segmentSize || pState->splitWait)
    {
       // Create a new filename string
-      asprintf(&tempname, filename, pState->segmentNumber);
+
+      //If %d/%u or any valid combination e.g. %04d is specified, assume segment number.
+      bool bSegmentNumber = false;
+      const char* pPercent = strchr(filename, '%');
+      if (pPercent)
+      {
+         pPercent++;
+         while (isdigit(*pPercent))
+            pPercent++;
+         if (*pPercent == 'u' || *pPercent == 'd')
+            bSegmentNumber = true;
+      }
+
+      if (bSegmentNumber)
+      {
+         asprintf(&tempname, filename, pState->segmentNumber);
+      }
+      else
+      {
+         char temp_ts_str[100];
+         time_t t = time(NULL);
+         struct tm *tm = localtime(&t);
+         strftime(temp_ts_str, 100, filename, tm);
+         asprintf(&tempname, "%s", temp_ts_str);
+      }
+
       filename = tempname;
    }
 
    if (filename)
    {
       bool bNetwork = false;
-      int sfd, socktype;
+      int sfd = -1, socktype;
 
       if(!strncmp("tcp://", filename, 6))
       {
@@ -1165,7 +1231,8 @@ static FILE *open_filename(RASPIVID_STATE *pState, char *filename)
                fprintf(stderr, "Error creating socket: %s\n", strerror(errno));
          }
 
-         new_handle = fdopen(sfd, "w");
+         if (sfd >= 0)
+            new_handle = fdopen(sfd, "w");
       }
       else
       {
@@ -1214,7 +1281,11 @@ static void update_annotation_data(RASPIVID_STATE *state)
       raspicamcontrol_set_annotate(state->camera_component, state->camera_parameters.enable_annotate, text,
                        state->camera_parameters.annotate_text_size,
                        state->camera_parameters.annotate_text_colour,
-                       state->camera_parameters.annotate_bg_colour);
+                       state->camera_parameters.annotate_bg_colour,
+                       state->camera_parameters.annotate_justify,
+                       state->camera_parameters.annotate_x,
+                       state->camera_parameters.annotate_y
+                       );
 
       free(text);
    }
@@ -1223,7 +1294,11 @@ static void update_annotation_data(RASPIVID_STATE *state)
       raspicamcontrol_set_annotate(state->camera_component, state->camera_parameters.enable_annotate, state->camera_parameters.annotate_string,
                        state->camera_parameters.annotate_text_size,
                        state->camera_parameters.annotate_text_colour,
-                       state->camera_parameters.annotate_bg_colour);
+                       state->camera_parameters.annotate_bg_colour,
+                       state->camera_parameters.annotate_justify,
+                       state->camera_parameters.annotate_x,
+                       state->camera_parameters.annotate_y
+                       );
    }
 }
 
@@ -1766,6 +1841,7 @@ static MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state)
       goto error;
    }
 
+   // Note: this sets lots of parameters that were not individually addressed before.
    raspicamcontrol_set_all_parameters(camera, &state->camera_parameters);
 
    state->camera_component = camera;
@@ -2124,6 +2200,7 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
          else
          {
             vcos_log_error("Too many macroblocks/s requested");
+            status = MMAL_EINVAL;
             goto error;
          }
       }
@@ -2144,48 +2221,56 @@ static MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state)
       // Continue rather than abort..
    }
 
-   //set INLINE HEADER flag to generate SPS and PPS for every IDR if requested
-   if (mmal_port_parameter_set_boolean(encoder_output, MMAL_PARAMETER_VIDEO_ENCODE_INLINE_HEADER, state->bInlineHeaders) != MMAL_SUCCESS)
+   if (state->encoding == MMAL_ENCODING_H264)
    {
-      vcos_log_error("failed to set INLINE HEADER FLAG parameters");
-      // Continue rather than abort..
-   }
-
-   //set INLINE VECTORS flag to request motion vector estimates
-   if (state->encoding == MMAL_ENCODING_H264 &&
-       mmal_port_parameter_set_boolean(encoder_output, MMAL_PARAMETER_VIDEO_ENCODE_INLINE_VECTORS, state->inlineMotionVectors) != MMAL_SUCCESS)
-   {
-      vcos_log_error("failed to set INLINE VECTORS parameters");
-      // Continue rather than abort..
-   }
-
-   // Adaptive intra refresh settings
-   if (state->encoding == MMAL_ENCODING_H264 &&
-       state->intra_refresh_type != -1)
-   {
-      MMAL_PARAMETER_VIDEO_INTRA_REFRESH_T  param;
-      param.hdr.id = MMAL_PARAMETER_VIDEO_INTRA_REFRESH;
-      param.hdr.size = sizeof(param);
-
-      // Get first so we don't overwrite anything unexpectedly
-      status = mmal_port_parameter_get(encoder_output, &param.hdr);
-      if (status != MMAL_SUCCESS)
+      //set INLINE HEADER flag to generate SPS and PPS for every IDR if requested
+      if (mmal_port_parameter_set_boolean(encoder_output, MMAL_PARAMETER_VIDEO_ENCODE_INLINE_HEADER, state->bInlineHeaders) != MMAL_SUCCESS)
       {
-         vcos_log_warn("Unable to get existing H264 intra-refresh values. Please update your firmware");
-         // Set some defaults, don't just pass random stack data
-         param.air_mbs = param.air_ref = param.cir_mbs = param.pir_mbs = 0;
+         vcos_log_error("failed to set INLINE HEADER FLAG parameters");
+         // Continue rather than abort..
       }
 
-      param.refresh_mode = state->intra_refresh_type;
-
-      //if (state->intra_refresh_type == MMAL_VIDEO_INTRA_REFRESH_CYCLIC_MROWS)
-      //   param.cir_mbs = 10;
-
-      status = mmal_port_parameter_set(encoder_output, &param.hdr);
-      if (status != MMAL_SUCCESS)
+      //set flag for add SPS TIMING
+      if (mmal_port_parameter_set_boolean(encoder_output, MMAL_PARAMETER_VIDEO_ENCODE_SPS_TIMING, state->addSPSTiming) != MMAL_SUCCESS)
       {
-         vcos_log_error("Unable to set H264 intra-refresh values");
-         goto error;
+         vcos_log_error("failed to set SPS TIMINGS FLAG parameters");
+         // Continue rather than abort..
+      }
+
+      //set INLINE VECTORS flag to request motion vector estimates
+      if (mmal_port_parameter_set_boolean(encoder_output, MMAL_PARAMETER_VIDEO_ENCODE_INLINE_VECTORS, state->inlineMotionVectors) != MMAL_SUCCESS)
+      {
+         vcos_log_error("failed to set INLINE VECTORS parameters");
+         // Continue rather than abort..
+      }
+
+      // Adaptive intra refresh settings
+      if ( state->intra_refresh_type != -1)
+      {
+         MMAL_PARAMETER_VIDEO_INTRA_REFRESH_T  param;
+         param.hdr.id = MMAL_PARAMETER_VIDEO_INTRA_REFRESH;
+         param.hdr.size = sizeof(param);
+   
+         // Get first so we don't overwrite anything unexpectedly
+         status = mmal_port_parameter_get(encoder_output, &param.hdr);
+         if (status != MMAL_SUCCESS)
+         {
+            vcos_log_warn("Unable to get existing H264 intra-refresh values. Please update your firmware");
+            // Set some defaults, don't just pass random stack data
+            param.air_mbs = param.air_ref = param.cir_mbs = param.pir_mbs = 0;
+         }
+
+         param.refresh_mode = state->intra_refresh_type;
+
+         //if (state->intra_refresh_type == MMAL_VIDEO_INTRA_REFRESH_CYCLIC_MROWS)
+         //   param.cir_mbs = 10;
+
+         status = mmal_port_parameter_set(encoder_output, &param.hdr);
+         if (status != MMAL_SUCCESS)
+         {
+            vcos_log_error("Unable to set H264 intra-refresh values");
+            goto error;
+         }
       }
    }
 
@@ -2388,14 +2473,45 @@ static int wait_for_next_change(RASPIVID_STATE *state)
       char ch;
 
       if (state->verbose)
-         fprintf(stderr, "Press Enter to %s, X then ENTER to exit\n", state->bCapturing ? "pause" : "capture");
+         fprintf(stderr, "Press Enter to %s, X then ENTER to exit, [i,o,r] then ENTER to change zoom\n", state->bCapturing ? "pause" : "capture");
 
       ch = getchar();
       if (ch == 'x' || ch == 'X')
          return 0;
-      else
-         return keep_running;
+      else if (ch == 'i' || ch == 'I')
+      {
+         if (state->verbose)
+            fprintf(stderr, "Starting zoom in\n");
+
+         raspicamcontrol_zoom_in_zoom_out(state->camera_component, ZOOM_IN, &(state->camera_parameters).roi);
+
+         if (state->verbose)
+            dump_status(state);
+      }
+      else if (ch == 'o' || ch == 'O')
+      {
+         if (state->verbose)
+            fprintf(stderr, "Starting zoom out\n");
+
+         raspicamcontrol_zoom_in_zoom_out(state->camera_component, ZOOM_OUT, &(state->camera_parameters).roi);
+
+         if (state->verbose)
+            dump_status(state);
+      }
+      else if (ch == 'r' || ch == 'R')
+      {
+         if (state->verbose)
+            fprintf(stderr, "starting reset zoom\n");
+
+         raspicamcontrol_zoom_in_zoom_out(state->camera_component, ZOOM_RESET, &(state->camera_parameters).roi);
+
+         if (state->verbose)
+            dump_status(state);
+      }
+
+      return keep_running;
    }
+
 
    case WAIT_METHOD_SIGNAL:
    {
@@ -2482,6 +2598,8 @@ int main(int argc, const char **argv)
       fprintf(stderr, "\n%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
       dump_status(&state);
    }
+
+   check_camera_model(state.cameraNum);
 
    // OK, we have a nice set of parameters. Now set up our components
    // We have three components. Camera, Preview and encoder.
@@ -2641,9 +2759,6 @@ int main(int argc, const char **argv)
             if (state.filename[0] == '-')
             {
                state.callback_data.file_handle = stdout;
-
-               // Ensure we don't upset the output stream with diagnostics/info
-               state.verbose = 0;
             }
             else
             {

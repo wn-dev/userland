@@ -31,7 +31,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /**
  * \file RaspiMJPEG.h
  **/
-#define VERSION "5.8.11" 
+#define VERSION "5.8.12" 
  
 #include <stdio.h>
 #include <stdlib.h>

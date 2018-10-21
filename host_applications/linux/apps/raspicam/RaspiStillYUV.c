@@ -57,7 +57,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <unistd.h>
 #include <errno.h>
 
-#define VERSION_STRING "v1.3.5"
+#define VERSION_STRING "v1.3.7"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -100,6 +100,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define FRAME_NEXT_SIGNAL        5
 #define FRAME_NEXT_IMMEDIATELY   6
 
+#define CAMERA_SETTLE_TIME       1000
+
 int mmal_status_to_int(MMAL_STATUS_T status);
 static void signal_handler(int signal_number);
 
@@ -114,13 +116,14 @@ typedef struct
    char *linkname;                     /// filename of output file
    int verbose;                        /// !0 if want detailed run information
    int timelapse;                      /// Delay between each picture in timelapse mode. If 0, disable timelapse
-   int useRGB;                         /// Output RGB data rather than YUV
+   MMAL_FOURCC_T encoding;             /// Use a MMAL encoding other than YUV
    int fullResPreview;                 /// If set, the camera preview port runs at capture resolution. Reduces fps.
    int frameNextMethod;                /// Which method to use to advance to next frame
    int settings;                       /// Request settings from the camera
    int cameraNum;                      /// Camera number
    int burstCaptureMode;               /// Enable burst mode
    int onlyLuma;                       /// Only output the luma / Y plane of the YUV data
+   int sensor_mode;                    /// Sensor mode. 0=auto. Check docs/forum for modes selected by other values.
 
    RASPIPREVIEW_PARAMETERS preview_parameters;    /// Preview setup parameters
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
@@ -160,6 +163,8 @@ static void display_valid_parameters(char *app_name);
 #define CommandSettings     13
 #define CommandBurstMode    14
 #define CommandOnlyLuma     15
+#define CommandSensorMode   16
+#define CommandUseBGR       17
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -179,6 +184,8 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandSettings, "-settings",  "set","Retrieve camera settings and write to stdout", 0},
    { CommandBurstMode, "-burst",    "bm", "Enable 'burst capture mode'", 0},
    { CommandOnlyLuma,  "-luma",     "y",  "Only output the luma / Y of the YUV data'", 0},
+   { CommandSensorMode,    "-mode",       "md", "Force sensor mode. 0=auto. See docs for other modes available", 1},
+   { CommandUseBGR,  "-bgr",        "bgr","Save as BGR data rather than YUV", 0},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -408,10 +415,10 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
       case CommandUseRGB: // display lots of data during run
          if (state->onlyLuma)
          {
-            fprintf(stderr, "--luma and --rgb are mutually exclusive\n");
+            fprintf(stderr, "--luma and --rgb/--bgr are mutually exclusive\n");
             valid = 0;
          }
-         state->useRGB = 1;
+         state->encoding = MMAL_ENCODING_RGB24;
          break;
 
       case CommandCamSelect:  //Select camera input port
@@ -448,12 +455,30 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILLYUV_STATE *state
          break;
 
       case CommandOnlyLuma:
-         if (state->useRGB)
+         if (state->encoding)
          {
             fprintf(stderr, "--luma and --rgb are mutually exclusive\n");
             valid = 0;
          }
          state->onlyLuma = 1;
+         break;
+
+      case CommandSensorMode:
+         if (sscanf(argv[i + 1], "%u", &state->sensor_mode) == 1)
+         {
+            i++;
+         }
+         else
+            valid = 0;
+         break;
+
+      case CommandUseBGR:
+         if (state->onlyLuma)
+         {
+            fprintf(stderr, "--luma and --rgb/--bgr are mutually exclusive\n");
+            valid = 0;
+         }
+         state->encoding = MMAL_ENCODING_BGR24;
          break;
 
       default:
@@ -579,7 +604,7 @@ static void camera_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buff
       int bytes_to_write = buffer->length;
 
       if (pData->pstate->onlyLuma)
-         bytes_to_write = port->format->es->video.width * port->format->es->video.height;
+         bytes_to_write = vcos_min(buffer->length, port->format->es->video.width * port->format->es->video.height);
 
       if (bytes_to_write && pData->file_handle)
       {
@@ -672,6 +697,14 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
    {
       status = MMAL_ENOSYS;
       vcos_log_error("Camera doesn't have output ports");
+      goto error;
+   }
+
+   status = mmal_port_parameter_set_uint32(camera->control, MMAL_PARAMETER_CAMERA_CUSTOM_SENSOR_CONFIG, state->sensor_mode);
+
+   if (status != MMAL_SUCCESS)
+   {
+      vcos_log_error("Could not set sensor mode : error %d", status);
       goto error;
    }
 
@@ -811,9 +844,16 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
         mmal_port_parameter_set(still_port, &fps_range.hdr);
    }
    // Set our stills format on the stills  port
-   if (state->useRGB)
+   if (state->encoding)
    {
-      format->encoding = mmal_util_rgb_order_fixed(still_port) ? MMAL_ENCODING_RGB24 : MMAL_ENCODING_BGR24;
+      format->encoding = state->encoding;
+      if (!mmal_util_rgb_order_fixed(still_port))
+      {
+         if (format->encoding == MMAL_ENCODING_RGB24)
+            format->encoding = MMAL_ENCODING_BGR24;
+         else if (format->encoding == MMAL_ENCODING_BGR24)
+            format->encoding = MMAL_ENCODING_RGB24;
+      }
       format->encoding_variant = 0;  //Irrelevant when not in opaque mode
    }
    else
@@ -834,6 +874,13 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
       still_port->buffer_size = still_port->buffer_size_min;
 
    still_port->buffer_num = still_port->buffer_num_recommended;
+
+   status = mmal_port_parameter_set_boolean(video_port, MMAL_PARAMETER_ZERO_COPY, MMAL_TRUE);
+   if (status != MMAL_SUCCESS)
+   {
+      vcos_log_error("Failed to select zero copy");
+      goto error;
+   }
 
    status = mmal_port_format_commit(still_port);
 
@@ -1027,7 +1074,7 @@ static int wait_for_next_frame(RASPISTILLYUV_STATE *state, int *frame)
 
       if (next_frame_ms == -1)
       {
-         vcos_sleep(state->timelapse);
+         vcos_sleep(CAMERA_SETTLE_TIME);
 
          // Update our current time after the sleep
          current_time =  vcos_getmicrosecs64()/1000;
@@ -1093,7 +1140,7 @@ static int wait_for_next_frame(RASPISTILLYUV_STATE *state, int *frame)
       // This could probably be tuned down.
       // First frame has a much longer delay to ensure we get exposure to a steady state
       if (*frame == 0)
-         vcos_sleep(1000);
+         vcos_sleep(CAMERA_SETTLE_TIME);
       else
          vcos_sleep(30);
 

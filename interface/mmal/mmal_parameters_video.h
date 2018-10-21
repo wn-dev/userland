@@ -102,6 +102,8 @@ enum {
    MMAL_PARAMETER_VIDEO_ENCODE_SPS_TIMING,         /**< Take a @ref MMAL_PARAMETER_BOOLEAN_T */
    MMAL_PARAMETER_VIDEO_MAX_NUM_CALLBACKS,         /**< Take a @ref MMAL_PARAMETER_UINT32_T */
    MMAL_PARAMETER_VIDEO_SOURCE_PATTERN,         /**< Take a @ref MMAL_PARAMETER_SOURCE_PATTERN_T */
+   MMAL_PARAMETER_VIDEO_ENCODE_SEPARATE_NAL_BUFS,  /**< Take a @ref MMAL_PARAMETER_BOOLEAN_T */
+   MMAL_PARAMETER_VIDEO_DROPPABLE_PFRAME_LENGTH,   /**< Take a @ref MMAL_PARAMETER_UINT32_T */
 };
 
 /** Display transformations.
@@ -503,6 +505,9 @@ typedef struct MMAL_PARAMETER_VIDEO_SOURCE_PATTERN_T {
    MMAL_PARAMETER_HEADER_T hdr;
 
    MMAL_SOURCE_PATTERN_T pattern;
+   uint32_t param;                              /**< Colour for PATTERN_COLOUR mode */
+   uint32_t framecount;                         /**< Number of frames to produce. 0 for continuous. */
+   MMAL_RATIONAL_T framerate;                   /**< Framerate used when determining buffer timestamps */
 } MMAL_PARAMETER_VIDEO_SOURCE_PATTERN_T;
 
 

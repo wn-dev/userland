@@ -58,7 +58,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <errno.h>
 #include <sysexits.h>
 
-#define VERSION_STRING "v1.3.8"
+#define VERSION_STRING "v1.3.11"
 
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
@@ -78,7 +78,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "RaspiCLI.h"
 #include "RaspiTex.h"
 
+#include "libgps_loader.h"
+
 #include <semaphore.h>
+#include <math.h>
+#include <pthread.h>
+#include <time.h>
 
 // Standard port setting for the camera component
 #define MMAL_CAMERA_PREVIEW_PORT 0
@@ -106,6 +111,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define FRAME_NEXT_SIGNAL        5
 #define FRAME_NEXT_IMMEDIATELY   6
 
+/// Amount of time before first image taken to allow settling of
+/// exposure etc. in milliseconds.
+#define CAMERA_SETTLE_TIME       1000
 
 int mmal_status_to_int(MMAL_STATUS_T status);
 static void signal_handler(int signal_number);
@@ -144,6 +152,7 @@ typedef struct
    int datetime;                       /// Use DateTime instead of frame#
    int timestamp;                      /// Use timestamp instead of frame#
    int restart_interval;               /// JPEG restart interval. 0 for none.
+   int gpsdExif;                       /// Add real-time gpsd output as EXIF tags
 
    RASPIPREVIEW_PARAMETERS preview_parameters;    /// Preview setup parameters
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
@@ -168,6 +177,21 @@ typedef struct
    VCOS_SEMAPHORE_T complete_semaphore; /// semaphore which is posted when we reach end of frame (indicates end of capture or fault)
    RASPISTILL_STATE *pstate;            /// pointer to our state in case required in callback
 } PORT_USERDATA;
+
+typedef struct
+{
+   pthread_mutex_t gps_cache_mutex;
+   gpsd_info gpsd;
+   struct gps_data_t gpsdata_cache;
+   time_t last_valid_time;
+   pthread_t gps_reader_thread;
+   RASPISTILL_STATE *pstate;            /// pointer to our state
+   int terminated;
+   int gps_reader_thread_ok;
+} GPS_READER_DATA;
+static GPS_READER_DATA gps_reader_data;
+
+#define GPS_CACHE_EXPIRY      5 // in seconds
 
 static void display_valid_parameters(char *app_name);
 static void store_exif_tag(RASPISTILL_STATE *state, const char *exif_tag);
@@ -200,6 +224,7 @@ static void store_exif_tag(RASPISTILL_STATE *state, const char *exif_tag);
 #define CommandTimeStamp    24
 #define CommandFrameStart   25
 #define CommandRestartInterval 26
+#define CommandGpsdExif     27
 
 static COMMAND_LIST cmdline_commands[] =
 {
@@ -219,7 +244,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandTimelapse,"-timelapse", "tl", "Timelapse mode. Takes a picture every <t>ms. %d == frame number (Try: -o img_%04d.jpg)", 1},
    { CommandFullResPreview,"-fullpreview","fp", "Run the preview using the still capture resolution (may reduce preview fps)", 0},
    { CommandKeypress,"-keypress",   "k",  "Wait between captures for a ENTER, X then ENTER to exit", 0},
-   { CommandSignal,  "-signal",     "s",  "Wait between captures for a SIGUSR1 from another process", 0},
+   { CommandSignal,  "-signal",     "s",  "Wait between captures for a SIGUSR1 or SIGUSR2 from another process", 0},
    { CommandGL,      "-gl",         "g",  "Draw preview to texture instead of using video render component", 0},
    { CommandGLCapture, "-glcapture","gc", "Capture the GL frame-buffer instead of the camera image", 0},
    { CommandSettings, "-settings",  "set","Retrieve camera settings and write to stdout", 0},
@@ -230,6 +255,7 @@ static COMMAND_LIST cmdline_commands[] =
    { CommandTimeStamp, "-timestamp", "ts", "Replace output pattern (%d) with unix timestamp (seconds since 1970)", 0},
    { CommandFrameStart,"-framestart","fs",  "Starting frame number in output pattern(%d)", 1},
    { CommandRestartInterval, "-restart","rs","JPEG Restart interval (default of 0 for none)", 1},
+   { CommandGpsdExif,  "-gpsdexif", "gps", "Apply real-time GPS information from gpsd as EXIF tags (requires "LIBGPS_SO_VERSION")", 0},
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -243,7 +269,9 @@ static struct
    {"jpg", MMAL_ENCODING_JPEG},
    {"bmp", MMAL_ENCODING_BMP},
    {"gif", MMAL_ENCODING_GIF},
-   {"png", MMAL_ENCODING_PNG}
+   {"png", MMAL_ENCODING_PNG},
+   {"ppm", MMAL_ENCODING_PPM},
+   {"tga", MMAL_ENCODING_TGA}
 };
 
 static int encoding_xref_size = sizeof(encoding_xref) / sizeof(encoding_xref[0]);
@@ -271,8 +299,6 @@ static void set_sensor_defaults(RASPISTILL_STATE *state)
    MMAL_STATUS_T status;
 
    // Default to the OV5647 setup
-   state->width = 2592;
-   state->height = 1944;
    strncpy(state->camera_name, "OV5647", MMAL_PARAMETER_CAMERA_INFO_MAX_STR_LEN);
 
    // Try to get the camera name and maximum supported resolution
@@ -289,12 +315,14 @@ static void set_sensor_defaults(RASPISTILL_STATE *state)
          // Running on newer firmware
          param.hdr.size = sizeof(param);
          status = mmal_port_parameter_get(camera_info->control, &param.hdr);
-         if (status == MMAL_SUCCESS && param.num_cameras > 0)
+         if (status == MMAL_SUCCESS && param.num_cameras > state->cameraNum)
          {
             // Take the parameters from the first camera listed.
-            state->width = param.cameras[0].max_width;
-            state->height = param.cameras[0].max_height;
-            strncpy(state->camera_name,  param.cameras[0].camera_name, MMAL_PARAMETER_CAMERA_INFO_MAX_STR_LEN);
+            if (state->width == 0)
+               state->width = param.cameras[state->cameraNum].max_width;
+            if (state->height == 0)
+               state->height = param.cameras[state->cameraNum].max_height;
+            strncpy(state->camera_name,  param.cameras[state->cameraNum].camera_name, MMAL_PARAMETER_CAMERA_INFO_MAX_STR_LEN);
             state->camera_name[MMAL_PARAMETER_CAMERA_INFO_MAX_STR_LEN-1] = 0;
          }
          else
@@ -312,6 +340,12 @@ static void set_sensor_defaults(RASPISTILL_STATE *state)
    {
       vcos_log_error("Failed to create camera_info component");
    }
+   //Command line hasn't specified a resolution, and we failed to
+   //get a default resolution from camera_info. Assume OV5647 full res
+   if (state->width == 0)
+      state->width = 2592;
+   if (state->height == 0)
+      state->height = 1944;
 }
 
 /**
@@ -360,9 +394,7 @@ static void default_status(RASPISTILL_STATE *state)
    state->datetime = 0;
    state->timestamp = 0;
    state->restart_interval = 0;
-
-   // Setup for sensor specific parameters
-   set_sensor_defaults(state);
+   state->gpsdExif = 0;
 
    // Setup preview window defaults
    raspipreview_set_defaults(&state->preview_parameters);
@@ -698,10 +730,11 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
          state->frameNextMethod = FRAME_NEXT_KEYPRESS;
          break;
 
-      case CommandSignal:   // Set SIGUSR1 between capture mode
+      case CommandSignal:   // Set SIGUSR1 & SIGUSR2 between capture mode
          state->frameNextMethod = FRAME_NEXT_SIGNAL;
          // Reenable the signal
          signal(SIGUSR1, signal_handler);
+         signal(SIGUSR2, signal_handler);
          break;
 
       case CommandGL:
@@ -753,6 +786,11 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
             valid = 0;
          break;
       }
+
+      case CommandGpsdExif:
+         state->gpsdExif = 1;
+         break;
+
 
       default:
       {
@@ -1393,7 +1431,7 @@ static MMAL_STATUS_T add_exif_tag(RASPISTILL_STATE *state, const char *exif_tag)
  * @param state Pointer to state control struct
  *
  */
-static void add_exif_tags(RASPISTILL_STATE *state)
+static void add_exif_tags(RASPISTILL_STATE *state, struct gps_data_t *gpsdata)
 {
    time_t rawtime;
    struct tm *timeinfo;
@@ -1427,6 +1465,127 @@ static void add_exif_tags(RASPISTILL_STATE *state)
 
    snprintf(exif_buf, sizeof(exif_buf), "IFD0.DateTime=%s", time_buf);
    add_exif_tag(state, exif_buf);
+
+
+   // Add GPS tags
+   if (state->gpsdExif)
+   {
+      // clear all existing tags first
+      add_exif_tag(state, "GPS.GPSDateStamp=");
+      add_exif_tag(state, "GPS.GPSTimeStamp=");
+      add_exif_tag(state, "GPS.GPSMeasureMode=");
+      add_exif_tag(state, "GPS.GPSSatellites=");
+      add_exif_tag(state, "GPS.GPSLatitude=");
+      add_exif_tag(state, "GPS.GPSLatitudeRef=");
+      add_exif_tag(state, "GPS.GPSLongitude=");
+      add_exif_tag(state, "GPS.GPSLongitudeRef=");
+      add_exif_tag(state, "GPS.GPSAltitude=");
+      add_exif_tag(state, "GPS.GPSAltitudeRef=");
+      add_exif_tag(state, "GPS.GPSSpeed=");
+      add_exif_tag(state, "GPS.GPSSpeedRef=");
+      add_exif_tag(state, "GPS.GPSTrack=");
+      add_exif_tag(state, "GPS.GPSTrackRef=");
+
+      pthread_mutex_lock(&gps_reader_data.gps_cache_mutex);
+      if (gpsdata->online)
+      {
+         if (state->verbose)
+            fprintf(stderr, "Adding GPS EXIF\n");
+         if (gpsdata->set & TIME_SET)
+         {
+            rawtime = gpsdata->fix.time;
+            timeinfo = localtime(&rawtime);
+            strftime(time_buf, sizeof(time_buf), "%Y:%m:%d", timeinfo);
+            snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSDateStamp=%s", time_buf);
+            add_exif_tag(state, exif_buf);
+            strftime(time_buf, sizeof(time_buf), "%H/1,%M/1,%S/1", timeinfo);
+            snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSTimeStamp=%s", time_buf);
+            add_exif_tag(state, exif_buf);
+         }
+         if (gpsdata->fix.mode >= MODE_2D)
+         {
+            snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSMeasureMode=%c",
+                     (gpsdata->fix.mode >= MODE_3D) ? '3' : '2');
+            add_exif_tag(state, exif_buf);
+            if ((gpsdata->satellites_used > 0) && (gpsdata->satellites_visible > 0))
+            {
+               snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSSatellites=Used:%d,Visible:%d",
+                        gpsdata->satellites_used, gpsdata->satellites_visible);
+               add_exif_tag(state, exif_buf);
+            }
+            else if (gpsdata->satellites_used > 0)
+            {
+               snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSSatellites=Used:%d",
+                        gpsdata->satellites_used);
+               add_exif_tag(state, exif_buf);
+            }
+            else if (gpsdata->satellites_visible > 0)
+            {
+               snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSSatellites=Visible:%d",
+                        gpsdata->satellites_visible);
+               add_exif_tag(state, exif_buf);
+            }
+
+
+            if (gpsdata->set & LATLON_SET)
+            {
+               if (isnan(gpsdata->fix.latitude) == 0)
+               {
+                  if (deg_to_str(fabs(gpsdata->fix.latitude), time_buf, sizeof(time_buf)) == 0)
+                  {
+                     snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSLatitude=%s", time_buf);
+                     add_exif_tag(state, exif_buf);
+                     snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSLatitudeRef=%c",
+                              (gpsdata->fix.latitude < 0) ? 'S' : 'N');
+                     add_exif_tag(state, exif_buf);
+                  }
+               }
+               if (isnan(gpsdata->fix.longitude) == 0)
+               {
+                  if (deg_to_str(fabs(gpsdata->fix.longitude), time_buf, sizeof(time_buf)) == 0)
+                  {
+                     snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSLongitude=%s", time_buf);
+                     add_exif_tag(state, exif_buf);
+                     snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSLongitudeRef=%c",
+                              (gpsdata->fix.longitude < 0) ? 'W' : 'E');
+                     add_exif_tag(state, exif_buf);
+                  }
+               }
+            }
+            if ((gpsdata->set & ALTITUDE_SET) && (gpsdata->fix.mode >= MODE_3D))
+            {
+               if (isnan(gpsdata->fix.altitude) == 0)
+               {
+                  snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSAltitude=%d/10",
+                           (int)(gpsdata->fix.altitude*10+0.5));
+                  add_exif_tag(state, exif_buf);
+                  add_exif_tag(state, "GPS.GPSAltitudeRef=0");
+               }
+            }
+            if (gpsdata->set & SPEED_SET)
+            {
+               if (isnan(gpsdata->fix.speed) == 0)
+               {
+                  snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSSpeed=%d/10",
+                           (int)(gpsdata->fix.speed*MPS_TO_KPH*10+0.5));
+                  add_exif_tag(state, exif_buf);
+                  add_exif_tag(state, "GPS.GPSSpeedRef=K");
+               }
+            }
+            if (gpsdata->set & TRACK_SET)
+            {
+               if (isnan(gpsdata->fix.track) == 0)
+               {
+                  snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSTrack=%d/100",
+                           (int)(gpsdata->fix.track*100+0.5));
+                  add_exif_tag(state, exif_buf);
+                  add_exif_tag(state, "GPS.GPSTrackRef=T");
+               }
+            }
+         }
+      }
+      pthread_mutex_unlock(&gps_reader_data.gps_cache_mutex);
+   }
 
    // Now send any user supplied tags
 
@@ -1534,10 +1693,10 @@ static void check_disable_port(MMAL_PORT_T *port)
  */
 static void signal_handler(int signal_number)
 {
-   if (signal_number == SIGUSR1)
+   if (signal_number == SIGUSR1 || signal_number == SIGUSR2)
    {
       // Handle but ignore - prevents us dropping out if started in none-signal mode
-      // and someone sends us the USR1 signal anyway
+      // and someone sends us the USR1 or USR2 signal anyway
    }
    else
    {
@@ -1597,7 +1756,7 @@ static int wait_for_next_frame(RASPISTILL_STATE *state, int *frame)
 
       if (next_frame_ms == -1)
       {
-         vcos_sleep(state->timelapse);
+         vcos_sleep(CAMERA_SETTLE_TIME);
 
          // Update our current time after the sleep
          current_time =  vcos_getmicrosecs64()/1000;
@@ -1663,7 +1822,7 @@ static int wait_for_next_frame(RASPISTILL_STATE *state, int *frame)
       // This could probably be tuned down.
       // First frame has a much longer delay to ensure we get exposure to a steady state
       if (*frame == 0)
-         vcos_sleep(1000);
+         vcos_sleep(CAMERA_SETTLE_TIME);
       else
          vcos_sleep(30);
 
@@ -1680,35 +1839,44 @@ static int wait_for_next_frame(RASPISTILL_STATE *state, int *frame)
 
    case FRAME_NEXT_SIGNAL :
    {
-      // Need to wait for a SIGUSR1 signal
+      // Need to wait for a SIGUSR1 or SIGUSR2 signal
       sigset_t waitset;
       int sig;
       int result = 0;
 
       sigemptyset( &waitset );
       sigaddset( &waitset, SIGUSR1 );
+      sigaddset( &waitset, SIGUSR2 );
 
       // We are multi threaded because we use mmal, so need to use the pthread
-      // variant of procmask to block SIGUSR1 so we can wait on it.
+      // variant of procmask to block until a SIGUSR1 or SIGUSR2 signal appears
       pthread_sigmask( SIG_BLOCK, &waitset, NULL );
 
       if (state->verbose)
       {
-         fprintf(stderr, "Waiting for SIGUSR1 to initiate capture\n");
+         fprintf(stderr, "Waiting for SIGUSR1 to initiate capture and continue or SIGUSR2 to capture and exit\n");
       }
 
       result = sigwait( &waitset, &sig );
 
-      if (state->verbose)
+      if (result == 0)
       {
-         if( result == 0)
+         if (sig == SIGUSR1)
          {
-            fprintf(stderr, "Received SIGUSR1\n");
+            if (state->verbose)
+               fprintf(stderr, "Received SIGUSR1\n");
          }
-         else
+         else if (sig == SIGUSR2)
          {
+            if (state->verbose)
+               fprintf(stderr, "Received SIGUSR2\n");
+            keep_running = 0;
+         }
+      }
+      else
+      {
+         if (state->verbose)
             fprintf(stderr, "Bad signal received - error %d\n", errno);
-         }
       }
 
       *frame+=1;
@@ -1753,13 +1921,65 @@ static void rename_file(RASPISTILL_STATE *state, FILE *output_file,
    }
 }
 
+void *gps_reader_process(void *gps_reader_data_ptr)
+{
+   GPS_READER_DATA *gps_reader = (GPS_READER_DATA *)gps_reader_data_ptr;
+   while (!gps_reader->terminated)
+   {
+      int ret = 0;
+      gps_reader->gpsd.gpsdata.set = 0;
+      gps_reader->gpsd.gpsdata.fix.mode = 0;
+      if ((connect_gpsd(&gps_reader->gpsd) < 0) ||
+          ((ret = read_gps_data_once(&gps_reader->gpsd)) < 0))
+         break;
+
+      int gps_valid = 0;
+      if ((ret > 0) && (gps_reader->gpsd.gpsdata.online))
+      {
+         if (gps_reader->gpsd.gpsdata.fix.mode >= MODE_2D)
+         {
+            // we have GPS fix, copy fresh data to cache
+            gps_valid = 1;
+            time(&gps_reader->last_valid_time);
+            pthread_mutex_lock(&gps_reader->gps_cache_mutex);
+            memcpy(&gps_reader->gpsdata_cache, &gps_reader->gpsd.gpsdata,
+                   sizeof(struct gps_data_t));
+            pthread_mutex_unlock(&gps_reader->gps_cache_mutex);
+         }
+      }
+      if (!gps_valid)
+      {
+         time_t now;
+         time(&now);
+         if (now - gps_reader->last_valid_time > GPS_CACHE_EXPIRY)
+         {
+            // our cache is stale, clear it
+            pthread_mutex_lock(&gps_reader->gps_cache_mutex);
+            gps_reader->gpsdata_cache.online = gps_reader->gpsd.gpsdata.online;
+            gps_reader->gpsdata_cache.set = 0;
+            gps_reader->gpsdata_cache.fix.mode = 0;
+            pthread_mutex_unlock(&gps_reader->gps_cache_mutex);
+         }
+         // we lost GPS fix, copy GPS time to cache if available
+         if (gps_reader->gpsd.gpsdata.set & TIME_SET)
+         {
+            pthread_mutex_lock(&gps_reader->gps_cache_mutex);
+            gps_reader->gpsdata_cache.set |= TIME_SET;
+            gps_reader->gpsdata_cache.fix.time = gps_reader->gpsd.gpsdata.fix.time;
+            pthread_mutex_unlock(&gps_reader->gps_cache_mutex);
+         }
+      }
+   }
+   return NULL;
+}
+
 /**
  * main
  */
 int main(int argc, const char **argv)
 {
    // Our main data storage vessel..
-   RASPISTILL_STATE state;
+   RASPISTILL_STATE state = {0};
    int exit_code = EX_OK;
 
    MMAL_STATUS_T status = MMAL_SUCCESS;
@@ -1777,15 +1997,16 @@ int main(int argc, const char **argv)
 
    signal(SIGINT, signal_handler);
 
-   // Disable USR1 for the moment - may be reenabled if go in to signal capture mode
+   // Disable USR1 and USR2 for the moment - may be reenabled if go in to signal capture mode
    signal(SIGUSR1, SIG_IGN);
+   signal(SIGUSR2, SIG_IGN);
 
    default_status(&state);
 
    // Do we have any parameters
    if (argc == 1)
    {
-      fprintf(stdout, "\%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
+      fprintf(stdout, "\n%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
 
       display_valid_parameters(basename(argv[0]));
       exit(EX_USAGE);
@@ -1797,11 +2018,57 @@ int main(int argc, const char **argv)
       exit(EX_USAGE);
    }
 
+   // Setup for sensor specific parameters
+   set_sensor_defaults(&state);
+
    if (state.verbose)
    {
       fprintf(stderr, "\n%s Camera App %s\n\n", basename(argv[0]), VERSION_STRING);
 
       dump_status(&state);
+   }
+
+   if (state.gpsdExif)
+   {
+      memset(&gps_reader_data, 0, sizeof(gps_reader_data));
+      pthread_mutex_init(&gps_reader_data.gps_cache_mutex, NULL);
+      gps_reader_data.pstate = &state;
+
+      gpsd_init(&gps_reader_data.gpsd);
+      if (libgps_load(&gps_reader_data.gpsd))
+      {
+         pthread_mutex_destroy(&gps_reader_data.gps_cache_mutex);
+         exit(EX_SOFTWARE);
+      }
+      if (state.verbose)
+         fprintf(stderr, "Connecting to gpsd @ %s:%s\n",
+                 gps_reader_data.gpsd.server, gps_reader_data.gpsd.port);
+      if (connect_gpsd(&gps_reader_data.gpsd))
+      {
+         fprintf(stderr, "no gpsd running or network error: %d, %s\n",
+                 errno, gps_reader_data.gpsd.gps_errstr(errno));
+         libgps_unload(&gps_reader_data.gpsd);
+         pthread_mutex_destroy(&gps_reader_data.gps_cache_mutex);
+         exit(EX_SOFTWARE);
+      }
+      if (state.verbose)
+         fprintf(stderr, "Waiting for GPS time\n");
+      if (wait_gps_time(&gps_reader_data.gpsd, 2))
+      {
+         if (state.verbose)
+            fprintf(stderr, "Warning: GPS time not available\n");
+      }
+      if (state.verbose)
+         fprintf(stderr, "Creating GPS reader thread\n");
+      if (pthread_create(&gps_reader_data.gps_reader_thread, NULL,
+                         gps_reader_process, &gps_reader_data))
+      {
+         fprintf(stderr, "Error creating GPS reader thread\n");
+         exit_code = EX_SOFTWARE;
+         gps_reader_data.terminated = 1;
+         goto gps_error;
+      }
+      gps_reader_data.gps_reader_thread_ok = 1;
    }
 
    if (state.useGL)
@@ -1943,9 +2210,6 @@ int main(int argc, const char **argv)
                   if (state.filename[0] == '-')
                   {
                      output_file = stdout;
-
-                     // Ensure we don't upset the output stream with diagnostics/info
-                     state.verbose = 0;
                   }
                   else
                   {
@@ -1990,7 +2254,7 @@ int main(int argc, const char **argv)
                   // once enabled no further exif data is accepted
                   if ( state.enableExifTags )
                   {
-                     add_exif_tags(&state);
+                     add_exif_tags(&state, &gps_reader_data.gpsdata_cache);
                   }
                   else
                   {
@@ -2046,7 +2310,11 @@ int main(int argc, const char **argv)
                                       state.camera_parameters.annotate_string,
                                       state.camera_parameters.annotate_text_size,
                                       state.camera_parameters.annotate_text_colour,
-                                      state.camera_parameters.annotate_bg_colour);
+                                      state.camera_parameters.annotate_bg_colour,
+                                      state.camera_parameters.annotate_justify,
+                                      state.camera_parameters.annotate_x,
+                                      state.camera_parameters.annotate_y
+                                      );
 
                   if (state.verbose)
                      fprintf(stderr, "Starting capture %d\n", frame);
@@ -2141,6 +2409,23 @@ error:
 
       if (state.verbose)
          fprintf(stderr, "Close down completed, all components disconnected, disabled and destroyed\n\n");
+   }
+
+gps_error:
+   if (state.gpsdExif)
+   {
+      gps_reader_data.terminated = 1;
+      if (gps_reader_data.gps_reader_thread_ok)
+      {
+         if (state.verbose)
+            fprintf(stderr, "Waiting for GPS reader thread to terminate\n");
+         pthread_join(gps_reader_data.gps_reader_thread, NULL);
+      }
+      if ((state.verbose) && (gps_reader_data.gpsd.gpsd_connected))
+         fprintf(stderr, "Closing gpsd connection\n\n");
+      disconnect_gpsd(&gps_reader_data.gpsd);
+      libgps_unload(&gps_reader_data.gpsd);
+      pthread_mutex_destroy(&gps_reader_data.gps_cache_mutex);
    }
 
    if (status != MMAL_SUCCESS)
