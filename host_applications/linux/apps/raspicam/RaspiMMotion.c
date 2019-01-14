@@ -49,6 +49,7 @@ int motion_changes;
 int motion_state; // 0 search for start, 1 search for stop
 int vector_buffer_index;
 int mask_valid = 0;
+int mask_disabled = 0;
 unsigned char *vector_buffer;
 unsigned char *mask_buffer_mem, *mask_buffer=0;
 
@@ -158,7 +159,7 @@ void analyse_vectors1(MMAL_BUFFER_HEADER_T *buffer) {
    motion_changes = 0;
    for(row=0; row<motion_height; row++) {
       for(col=0; col<motion_width; col++) {
-         if (mask_valid == 0 || mask_buffer[m]) {
+         if (mask_disabled == 1 || mask_valid == 0 || mask_buffer[m]) {
             if(data[i] > low_noise && data[i] < high_noise) motion_changes++;
             if(data[i+1] > low_noise && data[i+1] < high_noise) motion_changes++;
          }
@@ -205,7 +206,7 @@ void analyse_vectors2(MMAL_BUFFER_HEADER_T *buffer) {
    vectorsum = 0;
    for(row=1; row<(motion_height-1); row++) {
       for(col=1; col<(motion_width-1); col++) {
-         if (mask_valid == 0 || mask_buffer[m]) {
+         if (mask_disabled == 1 || mask_valid == 0 || mask_buffer[m]) {
             if( data[i-4] && data[i+4] && data[i-buffer_width] && data[i+buffer_width] ) {
                if(data[i] < 128) vectorsum += data[i]; else vectorsum += (256-data[i]);
                if(data[i+1] < 128) vectorsum += data[i+1]; else vectorsum += (256-data[i+1]);
@@ -303,4 +304,9 @@ void save_vectors(MMAL_BUFFER_HEADER_T *buffer) {
          }
       }
    }
+}
+
+void mask_disable(int disable) {
+	mask_disabled = disable;
+	printLog("mask disable %d\n", disable);
 }

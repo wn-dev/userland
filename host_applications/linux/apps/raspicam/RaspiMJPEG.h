@@ -31,7 +31,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /**
  * \file RaspiMJPEG.h
  **/
-#define VERSION "5.8.12" 
+#define VERSION "5.8.13" 
  
 #include <stdio.h>
 #include <stdlib.h>
@@ -99,6 +99,7 @@ extern int motion_changes;
 extern int motion_state;
 extern int vector_buffer_index;
 extern int mask_valid;
+extern int mask_disabled;
 extern unsigned char *vector_buffer;
 extern unsigned char *mask_buffer_mem, *mask_buffer;
 
@@ -188,6 +189,7 @@ void reset_motion_state();
 void start_vectors(char *vectorname);
 void stop_vectors();
 void save_vectors(MMAL_BUFFER_HEADER_T *buffer);
+void mask_disable(int disable);
 
 //Main
 void set_counts();

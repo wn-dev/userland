@@ -44,8 +44,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "RaspiMJPEG.h"
 
 void process_cmd(char *readbuf, int length) {
-   typedef enum pipe_cmd_type{ca,im,tl,px,bo,tv,vi,an,as,at,ac,ab,sh,co,br,sa,is,vs,rl,ec,em,wb,ag,mm,ie,ce,ro,fl,ri,ss,qu,pv,bi,ru,md,sc,rs,bu,mn,mt,mi,ms,mb,me,mc,mx,mf,vm,vp,wd,sy,um,cn,st,ls,qp} pipe_cmd_type;
-   char pipe_cmds[] = "ca,im,tl,px,bo,tv,vi,an,as,at,ac,ab,sh,co,br,sa,is,vs,rl,ec,em,wb,ag,mm,ie,ce,ro,fl,ri,ss,qu,pv,bi,ru,md,sc,rs,bu,mn,mt,mi,ms,mb,me,mc,mx,mf,vm,vp,wd,sy,um,cn,st,ls,qp";
+   typedef enum pipe_cmd_type{ca,im,tl,px,bo,tv,vi,an,as,at,ac,ab,sh,co,br,sa,is,vs,rl,ec,em,wb,ag,mm,ie,ce,ro,fl,ri,ss,qu,pv,bi,ru,md,sc,rs,bu,mn,mt,mi,ms,mb,me,mc,mx,mf,mz,vm,vp,wd,sy,um,cn,st,ls,qp} pipe_cmd_type;
+   char pipe_cmds[] = "ca,im,tl,px,bo,tv,vi,an,as,at,ac,ab,sh,co,br,sa,is,vs,rl,ec,em,wb,ag,mm,ie,ce,ro,fl,ri,ss,qu,pv,bi,ru,md,sc,rs,bu,mn,mt,mi,ms,mb,me,mc,mx,mf,mz,vm,vp,wd,sy,um,cn,st,ls,qp";
    pipe_cmd_type pipe_cmd;
    int parcount;
    char pars[128][10];
@@ -347,6 +347,9 @@ void process_cmd(char *readbuf, int length) {
          break;
       case mf:
          key = c_motion_file;
+         break;
+      case mz:
+         mask_disable((int)par0);
          break;
       case vm:
          key = c_vector_mode;
