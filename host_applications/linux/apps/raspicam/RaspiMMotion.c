@@ -66,6 +66,7 @@ void setup_motiondetect() {
       vector_buffer = 0;
    }
    mask_valid = 0;
+   mask_disabled = 0;
    
    if (cfg_val[c_motion_external] != 1) {
       mask_size = motion_width * motion_height;
