@@ -595,15 +595,11 @@ void stop_video(unsigned char stop_buf) {
       if(cfg_val[c_MP4Box]) {
         //Queue the h264 for boxing
         add_box_file(filename_recording);
-        makeBoxname(&filename_temp, filename_recording);
-        exec_macro(cfg_stru[c_end_vid], filename_temp);
-        free(filename_temp);
       }
-      else {
-        exec_macro(cfg_stru[c_end_vid], filename_recording);
-      }
+      makeBoxname(&filename_temp, filename_recording);
+      exec_macro(cfg_stru[c_end_vid], filename_temp);
+      free(filename_temp);
       free(filename_recording);
-
       video_cnt++;
     }
     updateStatus();
