@@ -91,7 +91,7 @@ char *cfg_key[] ={
    "video_width","video_height","video_fps","video_bitrate","video_buffer","video_split",
    "MP4Box","MP4Box_fps","boxing_path","MP4Box_cmd",
    "image_width","image_height","image_quality","tl_interval",
-   "base_path","preview_path","image_path","lapse_path","video_path","status_file","control_file","media_path","macros_path","subdir_char",
+   "base_path","preview_path","image_path","lapse_path","video_path","status_file","control_file","media_path","macros_path","subdir_char","enforce_lf","fifo_interval",
    "thumb_gen","autostart","motion_detection","motion_file","vector_preview","vector_mode", "motion_external",
    "motion_noise","motion_threshold","motion_image","motion_initframes","motion_startframes","motion_stopframes","motion_pipe","motion_clip","motion_logfile",
    "user_config","log_file","log_size","watchdog_interval","watchdog_errors","h264_buffer_size","h264_buffers","callback_timeout",
@@ -231,7 +231,7 @@ void checkPipe(int pipe) {
 		  length = readbuf[pipe] + 2 * MAX_COMMAND_LEN - 1 - lf;
 		  strncpy(readbuf[pipe], lf + 1, length);
 		} else {
-		  if (length == 0) {
+		  if ((length == 0) && (cfg_val[c_enforce_lf] == 0)) {
 			process_cmd(readbuf[pipe], readi[pipe]);
 			readi[pipe] = 0;			
 		  }
@@ -372,6 +372,8 @@ int main (int argc, char* argv[]) {
    send_schedulecmd("9");
    
    printLog("Starting command loop\n");
+   if(cfg_val[c_fifo_interval] < 100000)
+	   cfg_val[c_fifo_interval] = 100000;
    while(running) {
       for(i=0;i < FIFO_MAX; i++) {
 		  checkPipe(i);
@@ -434,7 +436,7 @@ int main (int argc, char* argv[]) {
             }
          }
       }
-      usleep(100000);
+      usleep(cfg_val[c_fifo_interval]);
    }
          
    close(fd);
