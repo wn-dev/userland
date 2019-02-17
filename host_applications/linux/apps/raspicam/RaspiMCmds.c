@@ -358,7 +358,8 @@ void process_cmd(char *readbuf, int length) {
          exec_macro(parstring, NULL);
          break;
       case um:
-         addUserValue(c_error_soft + par0, pars[1]);
+		 temp = strchr(parstring, ' ');
+		 if(temp) addUserValue(c_error_soft + par0, (temp+1));
          break;
       case cn:
          stop_all();
