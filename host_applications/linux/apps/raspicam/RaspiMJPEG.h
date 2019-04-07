@@ -31,7 +31,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /**
  * \file RaspiMJPEG.h
  **/
-#define VERSION "5.8.16" 
+#define VERSION "5.8.17" 
  
 #include <stdio.h>
 #include <stdlib.h>
@@ -145,6 +145,7 @@ void createMediaPath(char* filename);
 int copy_file(char *from_filename, char *to_filename);
 time_t get_mtime(const char *path);
 void makeBoxname(char** boxname, char *filename);
+void makeScriptname(char** scriptname, char *filename);
 void add_box_file(char *boxfile);
 int check_box_files();
 void check_h264_toBox();

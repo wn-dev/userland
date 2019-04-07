@@ -401,6 +401,15 @@ void makeBoxname(char** boxname, char *filename) {
 	if (ext != NULL) *ext = '.';
 }
 
+void makeScriptname(char** scriptname, char *filename) {
+	char *temp;
+	//trim off extension
+	char *ext = strrchr(filename, '.');
+	if (ext != NULL) *ext = 0;
+	asprintf(scriptname, "%s.h264", filename);
+	if (ext != NULL) *ext = '.';
+}
+
 int get_box_count() {
 	if (box_head >= box_tail)
 		return box_head - box_tail;
