@@ -65,27 +65,48 @@ static void dtoverlay_stdio_logging(dtoverlay_logging_type_t type,
 static DTOVERLAY_LOGGING_FUNC *dtoverlay_logging_func = dtoverlay_stdio_logging;
 static int dtoverlay_debug_enabled = 0;
 
-static uint32_t dtoverlay_read_u32(const void *src, int off)
+uint8_t dtoverlay_read_u8(const void *src, int off)
+{
+   const unsigned char *p = src;
+   return (p[off + 0] << 0);
+}
+
+uint16_t dtoverlay_read_u16(const void *src, int off)
+{
+   const unsigned char *p = src;
+   return (p[off + 0] << 8) | (p[off + 1] << 0);
+}
+
+uint32_t dtoverlay_read_u32(const void *src, int off)
 {
    const unsigned char *p = src;
    return (p[off + 0] << 24) | (p[off + 1] << 16) |
           (p[off + 2] << 8)  | (p[off + 3] << 0);
 }
 
-static void dtoverlay_write_u8(void *dst, int off, uint32_t val)
+uint64_t dtoverlay_read_u64(const void *src, int off)
+{
+   const unsigned char *p = src;
+   return ((uint64_t)p[off + 0] << 56) | ((uint64_t)p[off + 1] << 48) |
+          ((uint64_t)p[off + 2] << 40)  | ((uint64_t)p[off + 3] << 32) |
+          (p[off + 4] << 24) | (p[off + 5] << 16) |
+          (p[off + 6] << 8)  | (p[off + 7] << 0);
+}
+
+void dtoverlay_write_u8(void *dst, int off, uint32_t val)
 {
    unsigned char *p = dst;
    p[off] = (val >> 0) & 0xff;
 }
 
-static void dtoverlay_write_u16(void *dst, int off, uint32_t val)
+void dtoverlay_write_u16(void *dst, int off, uint32_t val)
 {
    unsigned char *p = dst;
    p[off + 0] = (val >> 8) & 0xff;
    p[off + 1] = (val >> 0) & 0xff;
 }
 
-static void dtoverlay_write_u32(void *dst, int off, uint32_t val)
+void dtoverlay_write_u32(void *dst, int off, uint32_t val)
 {
    unsigned char *p = dst;
    p[off + 0] = (val >> 24) & 0xff;
@@ -94,7 +115,7 @@ static void dtoverlay_write_u32(void *dst, int off, uint32_t val)
    p[off + 3] = (val >> 0) & 0xff;
 }
 
-static void dtoverlay_write_u64(void *dst, int off, uint64_t val)
+void dtoverlay_write_u64(void *dst, int off, uint64_t val)
 {
    unsigned char *p = dst;
    p[off + 0] = (val >> 56) & 0xff;
@@ -483,7 +504,7 @@ int dtoverlay_create_prop_fragment(DTBLOB_T *dtb, int idx, int target_phandle,
 	char fragment_name[20];
 	int frag_off, ovl_off;
 	int ret;
-	snprintf(fragment_name, sizeof(fragment_name), "fragment@%u", idx);
+	snprintf(fragment_name, sizeof(fragment_name), "fragment-%u", idx);
 	frag_off = fdt_add_subnode(dtb->fdt, 0, fragment_name);
 	if (frag_off < 0)
 		return frag_off;
@@ -936,7 +957,8 @@ int dtoverlay_merge_overlay(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb)
 
       node_name = fdt_get_name(overlay_dtb->fdt, frag_off, NULL);
 
-      if (strncmp(node_name, "fragment@", 9) != 0)
+      if (strncmp(node_name, "fragment@", 9) != 0 &&
+          strncmp(node_name, "fragment-", 9) != 0)
          continue;
       frag_name = node_name + 9;
 
@@ -1144,6 +1166,10 @@ int dtoverlay_override_one_target(int override_type,
 	 prop_val[prop_len - 1] = ' ';
 	 err = fdt_appendprop_string(dtb->fdt, node_off, prop_name, override_value);
       }
+      else if (strcmp(prop_name, "name") == 0) // "name" is a pseudo-property
+      {
+         err = dtoverlay_set_node_name(dtb, node_off, override_value);
+      }
       else
 	 err = fdt_setprop_string(dtb->fdt, node_off, prop_name, override_value);
    }
@@ -1225,7 +1251,7 @@ int dtoverlay_override_one_target(int override_type,
 	     break;
 	 }
 
-	 if (prop_buf)
+	 if (prop_buf && (strcmp(prop_name, "reg") != 0)) // Don't create or extend "reg" - it must be a pseudo-property
 	 {
 	     /* Add/extend the property by setting it */
              err = fdt_setprop(dtb->fdt, node_off, prop_name, prop_buf, new_prop_len);
@@ -1289,6 +1315,11 @@ int dtoverlay_override_one_target(int override_type,
 			  ((type == '!') && (override_int == 0));
 		  snprintf(node_name, sizeof(node_name), "/fragment@%u", frag_num);
 		  frag_off = fdt_path_offset(dtb->fdt, node_name);
+		  if (frag_off < 0)
+		  {
+		      snprintf(node_name, sizeof(node_name), "/fragment-%u", frag_num);
+		      frag_off = fdt_path_offset(dtb->fdt, node_name);
+		  }
 		  if (frag_off >= 0)
 		  {
 		     frag_off = fdt_subnode_offset(dtb->fdt, frag_off, states[!active]);

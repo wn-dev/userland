@@ -89,7 +89,8 @@ extern const unsigned int vc_image_rgb_component_order[VC_IMAGE_MAX + 1];
    case VC_IMAGE_YUV422YUYV:  \
    case VC_IMAGE_YUV422YVYU:  \
    case VC_IMAGE_YUV422UYVY:  \
-   case VC_IMAGE_YUV422VYUY
+   case VC_IMAGE_YUV422VYUY:  \
+   case VC_IMAGE_YUV10COL
 
 #define case_VC_IMAGE_ANY_RGB \
    case VC_IMAGE_RGB565:      \
@@ -108,7 +109,11 @@ extern const unsigned int vc_image_rgb_component_order[VC_IMAGE_MAX + 1];
    case VC_IMAGE_BGR888:      \
    case VC_IMAGE_BGR888_NP:   \
    case VC_IMAGE_ARGB8888:    \
-   case VC_IMAGE_XRGB8888
+   case VC_IMAGE_XRGB8888:    \
+   case VC_IMAGE_RGBX8888:    \
+   case VC_IMAGE_BGRX8888:    \
+   case VC_IMAGE_RGBA1010102
+
 
 #define case_VC_IMAGE_ANY_RGB_NOT_TF \
    case VC_IMAGE_RGB565:      \
@@ -124,7 +129,8 @@ extern const unsigned int vc_image_rgb_component_order[VC_IMAGE_MAX + 1];
    case VC_IMAGE_ARGB8888:    \
    case VC_IMAGE_XRGB8888:    \
    case VC_IMAGE_RGBX8888:    \
-   case VC_IMAGE_BGRX8888
+   case VC_IMAGE_BGRX8888:    \
+   case VC_IMAGE_RGBA1010102
 
 #define case_VC_IMAGE_ANY_TFORMAT \
    case VC_IMAGE_TF_RGBA32:   \

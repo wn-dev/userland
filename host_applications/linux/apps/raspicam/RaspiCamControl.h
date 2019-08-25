@@ -63,6 +63,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
             MMAL_PARAM_AWBMODE_INCANDESCENT,
             MMAL_PARAM_AWBMODE_FLASH,
             MMAL_PARAM_AWBMODE_HORIZON,
+            MMAL_PARAM_AWBMODE_GREYWORLD
  *
  * Image FX
             MMAL_PARAM_IMAGEFX_NONE,
@@ -170,10 +171,13 @@ typedef struct raspicam_camera_parameters_s
    MMAL_PARAMETER_STEREOSCOPIC_MODE_T stereo_mode;
    float analog_gain;         // Analog gain
    float digital_gain;        // Digital gain
+
+   int settings;
 } RASPICAM_CAMERA_PARAMETERS;
 
-typedef enum {
-    ZOOM_IN, ZOOM_OUT, ZOOM_RESET
+typedef enum
+{
+   ZOOM_IN, ZOOM_OUT, ZOOM_RESET
 } ZOOM_COMMAND_T;
 
 
@@ -235,6 +239,9 @@ MMAL_PARAM_AWBMODE_T raspicamcontrol_get_awb_mode(MMAL_COMPONENT_T *camera);
 MMAL_PARAM_IMAGEFX_T raspicamcontrol_get_imageFX(MMAL_COMPONENT_T *camera);
 MMAL_PARAM_COLOURFX_T raspicamcontrol_get_colourFX(MMAL_COMPONENT_T *camera);
 
+/** Default camera callback function
+  */
+void default_camera_control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer);
 
 
 

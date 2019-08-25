@@ -690,6 +690,7 @@ void cam_set_wb () {
    else if(strcmp(cfg_stru[c_white_balance], "incandescent") == 0) awb_mode = MMAL_PARAM_AWBMODE_INCANDESCENT;
    else if(strcmp(cfg_stru[c_white_balance], "flash") == 0) awb_mode = MMAL_PARAM_AWBMODE_FLASH;
    else if(strcmp(cfg_stru[c_white_balance], "horizon") == 0) awb_mode = MMAL_PARAM_AWBMODE_HORIZON;
+   else if(strcmp(cfg_stru[c_white_balance], "greyworld") == 0) awb_mode = MMAL_PARAM_AWBMODE_GREYWORLD;
    else {error("Invalid white balance", 0); return;}
    MMAL_PARAMETER_AWBMODE_T param = {{MMAL_PARAMETER_AWB_MODE,sizeof(param)}, awb_mode};
    status = mmal_port_parameter_set(camera->control, &param.hdr);
@@ -733,6 +734,9 @@ void cam_set_ie () {
    else if(strcmp(cfg_stru[c_image_effect], "colourpoint") == 0) imageFX = MMAL_PARAM_IMAGEFX_NONE;
    else if(strcmp(cfg_stru[c_image_effect], "colourbalance") == 0) imageFX = MMAL_PARAM_IMAGEFX_NONE;
    else if(strcmp(cfg_stru[c_image_effect], "cartoon") == 0) imageFX = MMAL_PARAM_IMAGEFX_CARTOON;
+   else if(strcmp(cfg_stru[c_image_effect], "deinterlacedouble") == 0) imageFX = MMAL_PARAM_IMAGEFX_DEINTERLACE_DOUBLE;
+   else if(strcmp(cfg_stru[c_image_effect], "deinterlaceadv") == 0) imageFX = MMAL_PARAM_IMAGEFX_DEINTERLACE_ADV;
+   else if(strcmp(cfg_stru[c_image_effect], "deinterlacefast") == 0) imageFX = MMAL_PARAM_IMAGEFX_DEINTERLACE_FAST;
    else {error("Invalid image effect", 0); return;}
    MMAL_PARAMETER_IMAGEFX_T imgFX = {{MMAL_PARAMETER_IMAGE_EFFECT,sizeof(imgFX)}, imageFX};
    status = mmal_port_parameter_set(camera->control, &imgFX.hdr);
