@@ -91,8 +91,10 @@ void process_cmd(char *readbuf, int length) {
 			if (parcount > 1) {
                long vtime = strtol(pars[1], NULL, 10);
                video_stoptime = time(NULL) + vtime;
+               video_stoptimeEnd = video_stoptime;
                printLog("Capturing %d seconds\n", vtime);
-            } else if (cfg_val[c_video_split] > 0) {
+            }
+			if (cfg_val[c_video_split] > 0) {
                video_stoptime = time(NULL) + cfg_val[c_video_split];
                printLog("Capturing with split of %d seconds\n", cfg_val[c_video_split]);
 			}

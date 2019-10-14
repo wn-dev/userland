@@ -65,7 +65,7 @@ int fd[FIFO_MAX], readi[FIFO_MAX];
 char header_bytes[29];
 int cb_len, cb_wptr, cb_wrap;
 int iframe_buff[IFRAME_BUFSIZE], iframe_buff_wpos, iframe_buff_rpos, header_wptr;
-unsigned int tl_cnt=0, mjpeg_cnt=0, image_cnt=0, image2_cnt=0, lapse_cnt=0, video_cnt=0, video_stoptime=0, video_frame;
+unsigned int tl_cnt=0, mjpeg_cnt=0, image_cnt=0, image2_cnt=0, lapse_cnt=0, video_cnt=0, video_stoptime=0, video_frame, video_stoptimeEnd;
 char *filename_recording = 0, *filename_image = 0;
 unsigned char timelapse=0, running=1, autostart=1, idle=0, a_error=0, v_capturing=0, i_capturing=0, v_boxing=0;
 unsigned char buffering=0, buffering_toggle=0;
@@ -428,8 +428,11 @@ int main (int argc, char* argv[]) {
             if (time(NULL) >= video_stoptime) {
                printLog("Stopping video from timer\n");
                stop_video(0);
-			   if (cfg_val[c_video_split] > 0) {
-                  video_stoptime = time(NULL) + cfg_val[c_video_split];
+			   if (cfg_val[c_video_split] > 0 && (video_stoptimeEnd == 0 || video_stoptimeEnd > time(NULL))) {
+				  video_stoptime = time(NULL) + cfg_val[c_video_split];
+                  if(video_stoptimeEnd != 0 && video_stoptime >= video_stoptimeEnd) {
+					 video_stoptime = video_stoptimeEnd;
+				  }
                   printLog("Restarting next split of %d seconds\n", cfg_val[c_video_split]);
 			      start_video(0);
 			   }
