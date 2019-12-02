@@ -374,7 +374,7 @@ int main (int argc, char* argv[]) {
    printLog("Starting command loop\n");
    if(cfg_val[c_fifo_interval] < 100000)
 	   cfg_val[c_fifo_interval] = 100000;
-   while(running) {
+   while(running == 1) {
       for(i=0;i < FIFO_MAX; i++) {
 		  checkPipe(i);
 	  }
@@ -405,7 +405,7 @@ int main (int argc, char* argv[]) {
             }
             if (watchdog_errors >= cfg_val[c_watchdog_errors]) {
                printLog("Watchdog detected problem. Stopping");
-               running = 0;
+               running = 2;
             }
          }
       } else {
@@ -450,6 +450,9 @@ int main (int argc, char* argv[]) {
    // tidy up
    //
    if(!idle) stop_all();
-   exec_macro(cfg_stru[c_startstop],"stop");
+   if(running == 0)
+	   exec_macro(cfg_stru[c_startstop],"stop");
+   else
+	   exec_macro(cfg_stru[c_startstop],"watchdog");
    return 0;
 }
