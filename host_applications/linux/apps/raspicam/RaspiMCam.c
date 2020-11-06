@@ -960,7 +960,8 @@ void start_all (int load_conf) {
    format->es->video.crop.width = cfg_val[c_video_width];
    format->es->video.crop.height = cfg_val[c_video_height];
    format->es->video.frame_rate.num = cfg_val[c_video_fps];
-   format->es->video.frame_rate.den = 1;
+   if(cfg_val[c_fps_divider] == 0) cfg_val[c_fps_divider] = 1;
+   format->es->video.frame_rate.den = cfg_val[c_fps_divider];
    status = mmal_port_format_commit(camera->output[1]);
    if(status != MMAL_SUCCESS) error("Could not set video format", 1);
    if(camera->output[1]->buffer_num < 3)

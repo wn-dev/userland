@@ -130,6 +130,7 @@ void process_cmd(char *readbuf, int length) {
          addUserValue(c_MP4Box_fps, pars[3]);
          addUserValue(c_image_width, pars[4]);
          addUserValue(c_image_height, pars[5]);
+         addUserValue(c_fps_divider, pars[6]);
          start_all(0);
          break;
       case qp:
