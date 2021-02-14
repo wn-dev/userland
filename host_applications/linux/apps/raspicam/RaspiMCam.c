@@ -513,7 +513,12 @@ void start_video(unsigned char prepare_buf) {
            copy_from_start = cb_wptr;
            copy_from_end = 0;
         }
-        long fileSizeCircularBuffer = copy_from_start + copy_from_end + header_wptr;
+		if(copy_from_start + copy_from_end >= cb_len) {
+			//printLog("buffer fix start\n");
+			copy_from_start = 0;
+			copy_from_end = cb_wptr - iframe_buff[iframe_buff_rpos];
+		}
+		long fileSizeCircularBuffer = copy_from_start + copy_from_end + header_wptr;
         fseek(h264output_file, fileSizeCircularBuffer, SEEK_SET);
       }
       exec_macro(cfg_stru[c_start_vid], filename_recording);
@@ -578,10 +583,15 @@ void stop_video(unsigned char stop_buf) {
           copy_from_start = cb_wptr;
           copy_from_end = 0;
         }
+		if(copy_from_start + copy_from_end >= cb_len) {
+			//printLog("buffer fix stop\n");
+			copy_from_start = 0;
+			copy_from_end = cb_wptr - iframe_buff[iframe_buff_rpos];
+		}
         fseek(h264output_file, 0, SEEK_SET);
         fwrite(header_bytes, 1, header_wptr, h264output_file);
         fwrite(cb_buff + iframe_buff[iframe_buff_rpos], 1, copy_from_end, h264output_file);
-        fwrite(cb_buff, 1, copy_from_start, h264output_file);
+        if (copy_from_start) fwrite(cb_buff, 1, copy_from_start, h264output_file);
         // reset buffer
         cb_wptr = 0;
         cb_wrap = 0;
