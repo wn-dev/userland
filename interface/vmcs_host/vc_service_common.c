@@ -34,7 +34,7 @@ VC_SERVICE_VCHI_STATUS_T vchi2service_status(int32_t x) {
    case VCHIQ_ERROR:
       ret = VC_SERVICE_VCHI_VCHIQ_ERROR; break;
    case VCHIQ_RETRY:
-      ret = VC_SERVUCE_VCHI_RETRY; break;
+      ret = VC_SERVICE_VCHI_RETRY; break;
    default:
       ret = VC_SERVICE_VCHI_UNKNOWN_ERROR;
    }
@@ -44,11 +44,11 @@ VC_SERVICE_VCHI_STATUS_T vchi2service_status(int32_t x) {
 const char* vchi2service_status_string(VC_SERVICE_VCHI_STATUS_T status) {
    const char* string = "";
    switch(status) {
-   case VCHIQ_SUCCESS:
+   case VC_SERVICE_VCHI_SUCCESS:
       string = "success"; break;
-   case VCHIQ_ERROR:
+   case VC_SERVICE_VCHI_VCHIQ_ERROR:
       string = "vchiq error"; break;
-   case VCHIQ_RETRY:
+   case VC_SERVICE_VCHI_RETRY:
       string = "retry"; break;
    default:
       string = "unknown";

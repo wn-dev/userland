@@ -872,7 +872,7 @@ static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
    if(state->camera_parameters.shutter_speed > 6000000)
    {
       MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
-         { 50, 1000 }, {166, 1000}
+         { 5, 1000 }, {166, 1000}
       };
       mmal_port_parameter_set(preview_port, &fps_range.hdr);
    }
@@ -935,7 +935,7 @@ static MMAL_STATUS_T create_camera_component(RASPISTILL_STATE *state)
    if(state->camera_parameters.shutter_speed > 6000000)
    {
       MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
-         { 50, 1000 }, {166, 1000}
+         { 5, 1000 }, {166, 1000}
       };
       mmal_port_parameter_set(still_port, &fps_range.hdr);
    }
@@ -1732,6 +1732,14 @@ int main(int argc, const char **argv)
       camera_still_port   = state.camera_component->output[MMAL_CAMERA_CAPTURE_PORT];
       encoder_input_port  = state.encoder_component->input[0];
       encoder_output_port = state.encoder_component->output[0];
+
+      if (state.burstCaptureMode &&
+          state.camera_parameters.exposureMode == MMAL_PARAM_EXPOSUREMODE_OFF &&
+          state.camera_parameters.shutter_speed &&
+          state.camera_parameters.analog_gain && state.camera_parameters.stats_pass)
+      {
+         mmal_port_parameter_set_boolean(state.camera_component->control,  MMAL_PARAMETER_CAMERA_BURST_CAPTURE, 1);
+      }
 
       if (! state.useGL)
       {

@@ -559,6 +559,16 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
       goto error;
    }
 
+   status = raspicamcontrol_set_stereo_mode(camera->output[0], &state->camera_parameters.stereo_mode);
+   status += raspicamcontrol_set_stereo_mode(camera->output[1], &state->camera_parameters.stereo_mode);
+   status += raspicamcontrol_set_stereo_mode(camera->output[2], &state->camera_parameters.stereo_mode);
+
+   if (status != MMAL_SUCCESS)
+   {
+      vcos_log_error("Could not set stereo mode : error %d", status);
+      goto error;
+   }
+
    MMAL_PARAMETER_INT32_T camera_num =
    {{MMAL_PARAMETER_CAMERA_NUM, sizeof(camera_num)}, state->common_settings.cameraNum};
 
@@ -636,7 +646,7 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
    if(state->camera_parameters.shutter_speed > 6000000)
    {
       MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
-         { 50, 1000 }, {166, 1000}
+         { 5, 1000 }, {166, 1000}
       };
       mmal_port_parameter_set(preview_port, &fps_range.hdr);
    }
@@ -700,7 +710,7 @@ static MMAL_STATUS_T create_camera_component(RASPISTILLYUV_STATE *state)
    if(state->camera_parameters.shutter_speed > 6000000)
    {
       MMAL_PARAMETER_FPS_RANGE_T fps_range = {{MMAL_PARAMETER_FPS_RANGE, sizeof(fps_range)},
-         { 50, 1000 }, {166, 1000}
+         { 5, 1000 }, {166, 1000}
       };
       mmal_port_parameter_set(still_port, &fps_range.hdr);
    }
@@ -1124,6 +1134,14 @@ int main(int argc, const char **argv)
 
       if (state.common_settings.verbose)
          fprintf(stderr, "Starting component connection stage\n");
+
+      if (state.burstCaptureMode &&
+          state.camera_parameters.exposureMode == MMAL_PARAM_EXPOSUREMODE_OFF &&
+          state.camera_parameters.shutter_speed &&
+          state.camera_parameters.analog_gain && state.camera_parameters.stats_pass)
+      {
+         mmal_port_parameter_set_boolean(state.camera_component->control,  MMAL_PARAMETER_CAMERA_BURST_CAPTURE, 1);
+      }
 
       camera_preview_port = state.camera_component->output[MMAL_CAMERA_PREVIEW_PORT];
       camera_video_port   = state.camera_component->output[MMAL_CAMERA_VIDEO_PORT];
