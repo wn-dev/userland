@@ -31,7 +31,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /**
  * \file RaspiMJPEG.h
  **/
-#define VERSION "5.9.5" 
+#define VERSION "5.10.1" 
  
 #include <stdio.h>
 #include <stdlib.h>
@@ -127,8 +127,8 @@ typedef enum cfgkey_type
    c_camera_num,c_stat_pass,c_user_annotate,c_count_format,c_minimise_frag,c_initial_quant,c_encode_qp,c_mmal_logfile,c_stop_pause,
    } cfgkey_type; 
 
-struct timespec currTime;
-struct tm *localTime;
+extern struct timespec currTime;
+extern struct tm *localTime;
 
 //Utils
 void mmalLog(char *msg, ...);
