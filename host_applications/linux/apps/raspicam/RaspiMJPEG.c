@@ -57,6 +57,9 @@ FILE *jpegoutput_file = NULL, *jpegoutput2_file = NULL, *h264output_file = NULL,
 MMAL_POOL_T *pool_jpegencoder = 0, *pool_jpegencoder_in = 0, *pool_jpegencoder2 = 0, *pool_h264encoder = 0;
 char *cb_buff = NULL;
 
+MMAL_COMPONENT_T *preview = 0, *splitter2 = 0 ;
+MMAL_CONNECTION_T *con_cam_preview = 0, *con_spli_preview = 0 ;
+
 char readbuf[FIFO_MAX][2 * MAX_COMMAND_LEN];
 int fd[FIFO_MAX], readi[FIFO_MAX];
 
@@ -99,7 +102,8 @@ char *cfg_key[] ={
    "motion_noise","motion_threshold","motion_image","motion_initframes","motion_startframes","motion_stopframes","motion_pipe","motion_clip","motion_logfile",
    "user_config","log_file","log_size","watchdog_interval","watchdog_errors","h264_buffer_size","h264_buffers","callback_timeout",
    "error_soft", "error_hard", "start_img", "end_img", "start_vid", "end_vid", "end_box", "do_cmd","motion_event","startstop",
-   "camera_num","stat_pass","user_annotate","count_format","minimise_frag","initial_quant","encode_qp","mmal_logfile","stop_pause"
+   "camera_num","stat_pass","user_annotate","count_format","minimise_frag","initial_quant","encode_qp","mmal_logfile","stop_pause",
+   "hdmi_preview"
 };
 
 
@@ -123,7 +127,6 @@ int getKey(char *key) {
 }
 
 void addValue(int keyI, char *value, int both){
-   
    free(cfg_stru[keyI]);
    cfg_stru[keyI] = 0;
    if (both) {free(cfg_strd[keyI]);cfg_strd[keyI] = 0;}
@@ -154,6 +157,7 @@ void addValue(int keyI, char *value, int both){
          case c_MP4Box:
             if(strcmp(value, "background") == 0)
                val = 2;
+	    break;
       }
       cfg_val[keyI] = val;
    }

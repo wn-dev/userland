@@ -58,8 +58,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define IFRAME_BUFSIZE (128*1024)
 #define STD_INTRAPERIOD 60
 extern MMAL_STATUS_T status;
-extern MMAL_COMPONENT_T *camera, *jpegencoder, *jpegencoder2, *h264encoder, *resizer, *null_sink, *splitter;
-extern MMAL_CONNECTION_T *con_cam_pre, *con_spli_res, *con_spli_h264, *con_res_jpeg, *con_cam_h264, *con_cam_jpeg;
+extern MMAL_COMPONENT_T *camera, *jpegencoder, *jpegencoder2, *h264encoder, *resizer, *null_sink, *splitter, *preview;
+extern MMAL_CONNECTION_T *con_cam_pre, *con_spli_res, *con_spli_h264, *con_res_jpeg, *con_cam_h264, *con_cam_jpeg, *con_cam_preview;
 extern FILE *jpegoutput_file, *jpegoutput2_file, *h264output_file, *status_file, *vector_file;
 extern MMAL_POOL_T *pool_jpegencoder, *pool_jpegencoder_in, *pool_jpegencoder2, *pool_h264encoder;
 extern char *cb_buff;
@@ -85,7 +85,7 @@ extern char *box_files[MAX_BOX_FILES];
 extern int box_head;
 extern int box_tail;
 //hold config file data for both dflt and user config files and u long versions
-#define KEY_COUNT 109
+#define KEY_COUNT 110
 extern char *cfg_strd[KEY_COUNT + 1];
 extern char *cfg_stru[KEY_COUNT + 1];
 extern long int cfg_val[KEY_COUNT + 1];
@@ -125,6 +125,7 @@ typedef enum cfgkey_type
    c_user_config,c_log_file,c_log_size,c_watchdog_interval,c_watchdog_errors, c_h264_buffer_size, c_h264_buffers,c_callback_timeout,
    c_error_soft, c_error_hard, c_start_img, c_end_img, c_start_vid, c_end_vid, c_end_box, c_do_cmd,c_motion_event,c_startstop,
    c_camera_num,c_stat_pass,c_user_annotate,c_count_format,c_minimise_frag,c_initial_quant,c_encode_qp,c_mmal_logfile,c_stop_pause,
+   c_hdmi_preview
    } cfgkey_type; 
 
 extern struct timespec currTime;
@@ -174,6 +175,7 @@ void cam_set(int key);
 void h264_enable_output ();
 void start_all (int load_conf);
 void stop_all (void);
+void cam_set_preview (int enable);
 
 //Cmds
 void process_cmd(char *readbuf, int length);
