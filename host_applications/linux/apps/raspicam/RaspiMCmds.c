@@ -43,9 +43,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //#define MOTION_INTERNAL
 #include "RaspiMJPEG.h"
 
+
 void process_cmd(char *readbuf, int length) {
-   typedef enum pipe_cmd_type{ca,im,tl,px,bo,tv,vi,an,as,at,ac,ab,sh,co,br,sa,is,vs,rl,ec,em,wb,ag,mm,ie,ce,ro,fl,ri,ss,qu,pv,bi,ru,md,sc,rs,bu,mn,mt,mi,ms,mb,me,mc,mx,mf,mz,vm,vp,wd,sy,um,cn,st,ls,qp} pipe_cmd_type;
-   char pipe_cmds[] = "ca,im,tl,px,bo,tv,vi,an,as,at,ac,ab,sh,co,br,sa,is,vs,rl,ec,em,wb,ag,mm,ie,ce,ro,fl,ri,ss,qu,pv,bi,ru,md,sc,rs,bu,mn,mt,mi,ms,mb,me,mc,mx,mf,mz,vm,vp,wd,sy,um,cn,st,ls,qp";
+   typedef enum pipe_cmd_type{ca,im,tl,px,bo,tv,vi,an,as,at,ac,ab,sh,co,br,sa,is,vs,rl,ec,em,wb,ag,mm,ie,ce,ro,fl,ri,ss,qu,pv,bi,ru,md,sc,rs,bu,mn,mt,mi,ms,mb,me,mc,mx,mf,mz,vm,vp,wd,sy,um,cn,st,ls,qp,hp} pipe_cmd_type;
+   char pipe_cmds[] = "ca,im,tl,px,bo,tv,vi,an,as,at,ac,ab,sh,co,br,sa,is,vs,rl,ec,em,wb,ag,mm,ie,ce,ro,fl,ri,ss,qu,pv,bi,ru,md,sc,rs,bu,mn,mt,mi,ms,mb,me,mc,mx,mf,mz,vm,vp,wd,sy,um,cn,st,ls,qp,hp";
    pipe_cmd_type pipe_cmd;
    int parcount;
    char pars[128][10];
@@ -371,6 +372,11 @@ void process_cmd(char *readbuf, int length) {
          break;
       case ls:
          key = c_log_size;
+         break;
+      case hp:
+         key = c_hdmi_preview;
+         printLog("Setting HDMI Preview to %s\n", par0 ? "ON" : "OFF");
+         cam_set_preview(par0);
          break;
       default:
          printLog("Unrecognised pipe command\n");

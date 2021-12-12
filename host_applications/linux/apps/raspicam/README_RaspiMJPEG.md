@@ -69,3 +69,5 @@ ru 1  restart mjpeg-stream
 md 1  start motion detection
 md 0  stop motion detection
 cm 1  select second camera (Raspberry Pi compute module only!)
+dy 0  disable HDMI preview of the camera stream
+dy 1  enable full-screen HDMI preview of the camera stream

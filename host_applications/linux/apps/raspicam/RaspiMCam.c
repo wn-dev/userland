@@ -1186,14 +1186,25 @@ void start_all (int load_conf) {
    if(status != MMAL_SUCCESS) error("Could not enable video spltter", 1);
 
    //
+   // Create Preview
+   //
+   status = mmal_component_create(MMAL_COMPONENT_DEFAULT_VIDEO_RENDERER, &preview);
+   if(status != MMAL_SUCCESS && status != MMAL_ENOSYS) error("Could not create preview component", 1);
+   status = mmal_component_enable(preview);
+   if(status != MMAL_SUCCESS) error("Could not enable preview component", 1);
+
+   //
    // connect
    //  
+
+   // Always connect the camera to the splitter, then take it from there (even if there
+   // is no need to split anything for vector-preview or motion-detection - as the HDMI preview will require a splitter).
+   status = mmal_connection_create(&con_cam_pre, camera->output[0], splitter->input[0], MMAL_CONNECTION_FLAG_TUNNELLING | MMAL_CONNECTION_FLAG_ALLOCATION_ON_INPUT);
+   if(status != MMAL_SUCCESS) error("Could not create connection camera -> splitter", 1);
+   status = mmal_connection_enable(con_cam_pre);
+   if(status != MMAL_SUCCESS) error("Could not enable connection camera -> splitter", 1);
+
    if(!cfg_val[c_vector_preview] && cfg_val[c_motion_detection]) {
-     status = mmal_connection_create(&con_cam_pre, camera->output[0], splitter->input[0], MMAL_CONNECTION_FLAG_TUNNELLING | MMAL_CONNECTION_FLAG_ALLOCATION_ON_INPUT);
-     if(status != MMAL_SUCCESS) error("Could not create connection camera -> splitter", 1);
-     status = mmal_connection_enable(con_cam_pre);
-     if(status != MMAL_SUCCESS) error("Could not enable connection camera -> splitter", 1);
-     
      status = mmal_connection_create(&con_spli_res, splitter->output[0], resizer->input[0], MMAL_CONNECTION_FLAG_TUNNELLING | MMAL_CONNECTION_FLAG_ALLOCATION_ON_INPUT);
      if(status != MMAL_SUCCESS) error("Could not create connection splitter -> resizer", 1);
      status = mmal_connection_enable(con_spli_res);
@@ -1210,10 +1221,10 @@ void start_all (int load_conf) {
      if(status != MMAL_SUCCESS) error("Could not enable connection splitter -> video converter", 1);
    }
    else if(!cfg_val[c_vector_preview]) {
-     status = mmal_connection_create(&con_cam_pre, camera->output[0], resizer->input[0], MMAL_CONNECTION_FLAG_TUNNELLING | MMAL_CONNECTION_FLAG_ALLOCATION_ON_INPUT);
-     if(status != MMAL_SUCCESS) error("Could not create connection camera -> resizer", 1);
-     status = mmal_connection_enable(con_cam_pre);
-     if(status != MMAL_SUCCESS) error("Could not enable connection camera -> resizer", 1);
+     status = mmal_connection_create(&con_spli_res, splitter->output[0], resizer->input[0], MMAL_CONNECTION_FLAG_TUNNELLING | MMAL_CONNECTION_FLAG_ALLOCATION_ON_INPUT);
+     if(status != MMAL_SUCCESS) error("Could not create connection splitter -> resizer", 1);
+     status = mmal_connection_enable(con_spli_res);
+     if(status != MMAL_SUCCESS) error("Could not enable connection splitter -> resizer", 1);
      
      status = mmal_connection_create(&con_res_jpeg, resizer->output[0], jpegencoder->input[0], MMAL_CONNECTION_FLAG_TUNNELLING | MMAL_CONNECTION_FLAG_ALLOCATION_ON_INPUT);
      if(status != MMAL_SUCCESS) error("Could not create connection resizer -> encoder", 1);
@@ -1221,17 +1232,31 @@ void start_all (int load_conf) {
      if(status != MMAL_SUCCESS) error("Could not enable connection resizer -> encoder", 1);
    }
    else {
-     status = mmal_connection_create(&con_cam_pre, camera->output[0], h264encoder->input[0], MMAL_CONNECTION_FLAG_TUNNELLING | MMAL_CONNECTION_FLAG_ALLOCATION_ON_INPUT);
-     if(status != MMAL_SUCCESS) error("Could not create connection camera -> video converter", 1);
-     status = mmal_connection_enable(con_cam_pre);
-     if(status != MMAL_SUCCESS) error("Could not enable connection camera -> video converter", 1);
+     status = mmal_connection_create(&con_spli_res, splitter->output[0], h264encoder->input[0], MMAL_CONNECTION_FLAG_TUNNELLING | MMAL_CONNECTION_FLAG_ALLOCATION_ON_INPUT);
+     if(status != MMAL_SUCCESS) error("Could not create connection splitter -> video converter", 1);
+     status = mmal_connection_enable(con_spli_res);
+     if(status != MMAL_SUCCESS) error("Could not enable connection splitter -> video converter", 1);
      
      status = mmal_port_enable(jpegencoder->input[0], jpegencoder_input_callback);
      if(status != MMAL_SUCCESS) error("Could not enable jpeg input port", 1);
      status = mmal_port_enable(jpegencoder->control, jpegencoder_input_callback);
      if(status != MMAL_SUCCESS) error("Could not enable jpeg control port", 1);
    }
-  
+
+
+   //
+   // Connect the camera output (through the splitter output)
+   // to the HDMI preview component.
+   MMAL_PORT_T *camera_preview_port = splitter->output[2];
+   MMAL_PORT_T *preview_input_port = preview->input[0];
+   status = mmal_connection_create(&con_cam_preview, camera_preview_port, preview_input_port, MMAL_CONNECTION_FLAG_TUNNELLING | MMAL_CONNECTION_FLAG_ALLOCATION_ON_INPUT);
+   if(status != MMAL_SUCCESS) error("Could not create connection splitter -> preview", 1);
+   if (cfg_val[c_hdmi_preview]) {
+     status = mmal_connection_enable(con_cam_preview);
+     if(status != MMAL_SUCCESS) error("Could not enable connection splitter -> preview", 1);
+   }
+
+
    h264_enable_output();
 
    status = mmal_port_enable(jpegencoder->output[0], jpegencoder_buffer_callback);
@@ -1388,3 +1413,15 @@ void stop_all (void) {
   //pthread_mutex_unlock(&v_mutex);
 }
 
+void cam_set_preview (int enable)
+{
+  MMAL_STATUS_T status;
+
+  if (enable) {
+    status = mmal_connection_enable(con_cam_preview);
+    if(status != MMAL_SUCCESS) error("Could not enable preview mmal connection", 1);
+  } else {
+    status = mmal_connection_disable(con_cam_preview);
+    if(status != MMAL_SUCCESS) error("Could not disable preview mmal connection", 1);
+  }
+}
